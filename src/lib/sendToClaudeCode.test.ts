@@ -27,7 +27,7 @@ describe("sendToClaudeCode", () => {
 
   describe("MCP transport", () => {
     it("writes to .claude/inbox/ when MCP is active", async () => {
-      localStorage.setItem("monocode:mcp_active", "true");
+      localStorage.setItem("aiworkspace:mcp_active", "true");
       mockInvoke.mockResolvedValue(undefined);
 
       const result = await sendToClaudeCode({ source: "browser", content: "Error: 404" });
@@ -40,7 +40,7 @@ describe("sendToClaudeCode", () => {
     });
 
     it("increments inbox counter on each call", async () => {
-      localStorage.setItem("monocode:mcp_active", "true");
+      localStorage.setItem("aiworkspace:mcp_active", "true");
       mockInvoke.mockResolvedValue(undefined);
 
       await sendToClaudeCode({ source: "http", content: "req 1" });
@@ -52,7 +52,7 @@ describe("sendToClaudeCode", () => {
     });
 
     it("includes source label in inbox content", async () => {
-      localStorage.setItem("monocode:mcp_active", "true");
+      localStorage.setItem("aiworkspace:mcp_active", "true");
       mockInvoke.mockResolvedValue(undefined);
 
       await sendToClaudeCode({ source: "db", content: "row data" });
@@ -75,13 +75,13 @@ describe("sendToClaudeCode", () => {
       }));
     });
 
-    it("PTY message includes MonoCode context marker", async () => {
+    it("PTY message includes AIWorkspace context marker", async () => {
       mockInvoke.mockResolvedValue(undefined);
 
       await sendToClaudeCode({ source: "browser", content: "console error" });
 
       const data = mockInvoke.mock.calls[0][1].data as string;
-      expect(data).toContain("——— MonoCode context ———");
+      expect(data).toContain("——— AIWorkspace context ———");
     });
 
     it("returns PTY transport silently when no terminal is open", async () => {
@@ -94,7 +94,7 @@ describe("sendToClaudeCode", () => {
     });
 
     it("falls back to PTY when MCP is active but no active project", async () => {
-      localStorage.setItem("monocode:mcp_active", "true");
+      localStorage.setItem("aiworkspace:mcp_active", "true");
       mockProjectsStore.activeProjectId = null as unknown as string;
       mockInvoke.mockResolvedValue(undefined);
 

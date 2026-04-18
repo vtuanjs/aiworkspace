@@ -17,8 +17,8 @@ export const SEND_TRANSPORT = {
 } as const;
 export type SendTransport = typeof SEND_TRANSPORT[keyof typeof SEND_TRANSPORT];
 
-const MCP_ACTIVE_KEY = "monocode:mcp_active";
-const INBOX_COUNTER_KEY = "monocode:inbox_counter";
+const MCP_ACTIVE_KEY = "aiworkspace:mcp_active";
+const INBOX_COUNTER_KEY = "aiworkspace:inbox_counter";
 
 function isMcpActive(): boolean {
   return localStorage.getItem(MCP_ACTIVE_KEY) === "true";
@@ -53,7 +53,7 @@ async function sendViaMcp(
   const index = nextInboxIndex();
   const filename = `${zeroPad(index)}.md`;
   const inboxPath = `${projectPath}/.claude/inbox/${filename}`;
-  const body = `# MonoCode Context\n\n${formatContext(ctx)}\n`;
+  const body = `# AIWorkspace Context\n\n${formatContext(ctx)}\n`;
   await invoke("write_file", { path: inboxPath, content: body });
 }
 
@@ -61,7 +61,7 @@ async function sendViaPty(
   ctx: WorkspaceContext,
   terminalId: string
 ): Promise<void> {
-  const message = `\n——— MonoCode context ———\n${formatContext(ctx)}\n`;
+  const message = `\n——— AIWorkspace context ———\n${formatContext(ctx)}\n`;
   await invoke("write_terminal", { terminalId, data: message });
 }
 

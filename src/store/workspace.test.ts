@@ -57,7 +57,7 @@ describe("useWorkspaceStore", () => {
       expect(state.openFiles).toEqual(["src/App.tsx"]);
       expect(state.activeTerminalId).toBe("term-1");
       expect(mockInvoke).toHaveBeenCalledWith("read_file", {
-        path: "/proj/.monocode/workspace.json",
+        path: "/proj/.aiworkspace/workspace.json",
       });
     });
 
@@ -108,7 +108,7 @@ describe("useWorkspaceStore", () => {
       await useWorkspaceStore.getState().saveToDisk("/proj");
 
       expect(mockInvoke).toHaveBeenCalledWith("write_file", {
-        path: "/proj/.monocode/workspace.json",
+        path: "/proj/.aiworkspace/workspace.json",
         content: expect.any(String),
       });
 

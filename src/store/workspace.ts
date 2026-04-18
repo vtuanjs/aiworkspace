@@ -13,7 +13,7 @@ export const PANEL = {
 } as const;
 export type Panel = typeof PANEL[keyof typeof PANEL];
 
-// Shape stored in <project>/.monocode/workspace.json
+// Shape stored in <project>/.aiworkspace/workspace.json
 interface WorkspaceDiskData {
   active_panel?: string;
   browser_url?: string;
@@ -25,10 +25,14 @@ export interface WorkspaceState {
   activePanel: Panel;
   browserUrl: string;
   openFiles: string[];
+  activeFile: string | null;
+  previewFile: string | null;
   activeTerminalId: string | null;
   setActivePanel: (panel: Panel) => void;
   setBrowserUrl: (url: string) => void;
   setOpenFiles: (files: string[]) => void;
+  setActiveFile: (file: string | null) => void;
+  setPreviewFile: (file: string | null) => void;
   setActiveTerminalId: (id: string | null) => void;
   loadFromDisk: (projectPath: string) => Promise<void>;
   saveToDisk: (projectPath: string) => Promise<void>;
@@ -42,17 +46,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activePanel: PANEL.TERMINAL,
   browserUrl: "",
   openFiles: [],
+  activeFile: null,
+  previewFile: null,
   activeTerminalId: null,
 
   setActivePanel: (panel) => set({ activePanel: panel }),
   setBrowserUrl: (url) => set({ browserUrl: url }),
   setOpenFiles: (files) => set({ openFiles: files }),
+  setActiveFile: (file) => set({ activeFile: file }),
+  setPreviewFile: (file) => set({ previewFile: file }),
   setActiveTerminalId: (id) => set({ activeTerminalId: id }),
 
   loadFromDisk: async (projectPath: string) => {
     try {
       const raw = await invoke<string>("read_file", {
-        path: `${projectPath}/.monocode/workspace.json`,
+        path: `${projectPath}/.aiworkspace/workspace.json`,
       });
       const ws: WorkspaceDiskData = JSON.parse(raw);
       set({
@@ -82,7 +90,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       active_terminal_id: activeTerminalId,
     };
     await invoke("write_file", {
-      path: `${projectPath}/.monocode/workspace.json`,
+      path: `${projectPath}/.aiworkspace/workspace.json`,
       content: JSON.stringify(data, null, 2),
     });
   },
