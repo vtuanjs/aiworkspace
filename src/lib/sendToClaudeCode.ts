@@ -4,7 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspaceStore } from "../store/workspace";
-import { useProjectsStore } from "../store/projects";
+import { useWorkspacesStore } from "../store/workspaces";
 
 export interface WorkspaceContext {
   source: "browser" | "http" | "db";
@@ -69,15 +69,15 @@ export async function sendToClaudeCode(
   context: WorkspaceContext
 ): Promise<{ transport: SendTransport }> {
   const workspaceState = useWorkspaceStore.getState();
-  const projectsState = useProjectsStore.getState();
+  const workspacesState = useWorkspacesStore.getState();
 
-  const activeProjectId = projectsState.activeProjectId;
-  const activeProject = activeProjectId
-    ? projectsState.projects.find((p) => p.id === activeProjectId)
+  const activeWorkspaceId = workspacesState.activeWorkspaceId;
+  const activeWorkspace = activeWorkspaceId
+    ? workspacesState.workspaces.find((w) => w.id === activeWorkspaceId)
     : null;
 
-  if (isMcpActive() && activeProject) {
-    await sendViaMcp(context, activeProject.path);
+  if (isMcpActive() && activeWorkspace) {
+    await sendViaMcp(context, activeWorkspace.path);
     return { transport: SEND_TRANSPORT.MCP };
   }
 

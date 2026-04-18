@@ -4,11 +4,11 @@ const mockInvoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 
 const mockProjectsStore = vi.hoisted(() => ({
-  activeProjectId: "proj-1",
-  projects: [{ id: "proj-1", path: "/project", name: "Test Project" }],
+  activeWorkspaceId: "proj-1",
+  workspaces: [{ id: "proj-1", path: "/project", name: "Test Project" }],
 }));
-vi.mock("../store/projects", () => ({
-  useProjectsStore: { getState: () => mockProjectsStore },
+vi.mock("../store/workspaces", () => ({
+  useWorkspacesStore: { getState: () => mockProjectsStore },
 }));
 
 const mockEnvironmentStore = vi.hoisted(() => ({
@@ -44,7 +44,7 @@ describe("executeRequest", () => {
     mockInvoke.mockReset();
     mockFetch.mockReset();
     mockEnvironmentStore.getActiveRuntimeTokens.mockReturnValue({});
-    mockProjectsStore.activeProjectId = "proj-1";
+    mockProjectsStore.activeWorkspaceId = "proj-1";
   });
 
   describe("REQUEST_SOURCE constants", () => {
@@ -184,7 +184,7 @@ describe("executeRequest", () => {
     });
 
     it("skips resolution and returns raw request when no active project", async () => {
-      mockProjectsStore.activeProjectId = null as unknown as string;
+      mockProjectsStore.activeWorkspaceId = null as unknown as string;
       mockFetch.mockResolvedValue(makeFetchResponse(200, "ok"));
 
       const entry = await executeRequest(

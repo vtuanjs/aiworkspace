@@ -2,7 +2,7 @@
 // Source label ("YOU" | "CLAUDE_CODE") is the only difference between the two callers.
 
 import { invoke } from "@tauri-apps/api/core";
-import { useProjectsStore } from "../store/projects";
+import { useWorkspacesStore } from "../store/workspaces";
 import { useEnvironmentStore } from "../store/environment";
 
 export const REQUEST_SOURCE = {
@@ -35,13 +35,13 @@ export interface HttpLogEntry {
 }
 
 async function resolveRequestVariables(request: HttpRequest): Promise<HttpRequest> {
-  const projectsState = useProjectsStore.getState();
-  const activeProjectId = projectsState.activeProjectId;
-  const activeProject = activeProjectId
-    ? projectsState.projects.find((p) => p.id === activeProjectId)
+  const workspacesState = useWorkspacesStore.getState();
+  const activeWorkspaceId = workspacesState.activeWorkspaceId;
+  const activeWorkspace = activeWorkspaceId
+    ? workspacesState.workspaces.find((w) => w.id === activeWorkspaceId)
     : null;
 
-  if (!activeProject) return request;
+  if (!activeWorkspace) return request;
 
   const runtimeTokens = useEnvironmentStore.getState().getActiveRuntimeTokens();
 
@@ -50,7 +50,7 @@ async function resolveRequestVariables(request: HttpRequest): Promise<HttpReques
     try {
       return await invoke<string>("resolve_variables", {
         text,
-        projectPath: activeProject.path,
+        projectPath: activeWorkspace.path,
         runtimeTokens,
       });
     } catch {

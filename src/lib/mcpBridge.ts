@@ -4,7 +4,7 @@
 
 import { listen, emit } from "@tauri-apps/api/event";
 import { useWorkspaceStore } from "../store/workspace";
-import { useProjectsStore } from "../store/projects";
+import { useWorkspacesStore } from "../store/workspaces";
 import { useEnvironmentStore } from "../store/environment";
 import { executeRequest, REQUEST_SOURCE } from "./httpExecutor";
 
@@ -56,13 +56,13 @@ async function handleToolCall(payload: McpToolCallPayload): Promise<McpToolResul
       }
 
       case "env_get_variables": {
-        const projectsState = useProjectsStore.getState();
-        const activeProjectId = projectsState.activeProjectId;
-        const activeProject = activeProjectId
-          ? projectsState.projects.find((p) => p.id === activeProjectId)
+        const workspacesState = useWorkspacesStore.getState();
+        const activeWorkspaceId = workspacesState.activeWorkspaceId;
+        const activeWorkspace = activeWorkspaceId
+          ? workspacesState.workspaces.find((w) => w.id === activeWorkspaceId)
           : null;
 
-        if (!activeProject) return { id, result: {} };
+        if (!activeWorkspace) return { id, result: {} };
 
         const envStore = useEnvironmentStore.getState();
         const requestedEnv = typeof params.environment === "string"
@@ -85,17 +85,17 @@ async function handleToolCall(payload: McpToolCallPayload): Promise<McpToolResul
       }
 
       case "env_switch": {
-        const projectsState = useProjectsStore.getState();
-        const activeProjectId = projectsState.activeProjectId;
-        const activeProject = activeProjectId
-          ? projectsState.projects.find((p) => p.id === activeProjectId)
+        const workspacesState = useWorkspacesStore.getState();
+        const activeWorkspaceId = workspacesState.activeWorkspaceId;
+        const activeWorkspace = activeWorkspaceId
+          ? workspacesState.workspaces.find((w) => w.id === activeWorkspaceId)
           : null;
         const envName = typeof params.environment === "string" ? params.environment : null;
 
-        if (!activeProject || !envName) {
+        if (!activeWorkspace || !envName) {
           return { id, error: "Missing project or environment name" };
         }
-        await useEnvironmentStore.getState().switchEnvironment(activeProject.path, envName);
+        await useEnvironmentStore.getState().switchEnvironment(activeWorkspace.path, envName);
         return { id, result: { switched: true, environment: envName } };
       }
 
@@ -113,10 +113,10 @@ async function handleToolCall(payload: McpToolCallPayload): Promise<McpToolResul
 
       case "workspace_get_context": {
         const workspaceState = useWorkspaceStore.getState();
-        const projectsState = useProjectsStore.getState();
-        const activeProjectId = projectsState.activeProjectId;
-        const activeProject = activeProjectId
-          ? projectsState.projects.find((p) => p.id === activeProjectId)
+        const workspacesState = useWorkspacesStore.getState();
+        const activeWorkspaceId = workspacesState.activeWorkspaceId;
+        const activeWorkspace = activeWorkspaceId
+          ? workspacesState.workspaces.find((w) => w.id === activeWorkspaceId)
           : null;
 
         return {
@@ -125,8 +125,8 @@ async function handleToolCall(payload: McpToolCallPayload): Promise<McpToolResul
             activePanel: workspaceState.activePanel,
             openFiles: workspaceState.openFiles,
             browserUrl: workspaceState.browserUrl,
-            projectPath: activeProject?.path ?? null,
-            projectName: activeProject?.name ?? null,
+            projectPath: activeWorkspace?.path ?? null,
+            projectName: activeWorkspace?.name ?? null,
           },
         };
       }

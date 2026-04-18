@@ -4,15 +4,15 @@ const mockInvoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 
 const mockWorkspaceStore = vi.hoisted(() => ({ activeTerminalId: "term-1" }));
-const mockProjectsStore = vi.hoisted(() => ({
-  activeProjectId: "proj-1",
-  projects: [{ id: "proj-1", path: "/home/user/myproject", name: "My Project" }],
+const mockWorkspacesStore = vi.hoisted(() => ({
+  activeWorkspaceId: "proj-1",
+  workspaces: [{ id: "proj-1", path: "/home/user/myproject", name: "My Project" }],
 }));
 vi.mock("../store/workspace", () => ({
   useWorkspaceStore: { getState: () => mockWorkspaceStore },
 }));
-vi.mock("../store/projects", () => ({
-  useProjectsStore: { getState: () => mockProjectsStore },
+vi.mock("../store/workspaces", () => ({
+  useWorkspacesStore: { getState: () => mockWorkspacesStore },
 }));
 
 import { sendToClaudeCode, SEND_TRANSPORT } from "./sendToClaudeCode";
@@ -22,7 +22,7 @@ describe("sendToClaudeCode", () => {
     mockInvoke.mockReset();
     localStorage.clear();
     mockWorkspaceStore.activeTerminalId = "term-1";
-    mockProjectsStore.activeProjectId = "proj-1";
+    mockWorkspacesStore.activeWorkspaceId = "proj-1";
   });
 
   describe("MCP transport", () => {
@@ -95,7 +95,7 @@ describe("sendToClaudeCode", () => {
 
     it("falls back to PTY when MCP is active but no active project", async () => {
       localStorage.setItem("aiworkspace:mcp_active", "true");
-      mockProjectsStore.activeProjectId = null as unknown as string;
+      mockWorkspacesStore.activeWorkspaceId = null as unknown as string;
       mockInvoke.mockResolvedValue(undefined);
 
       const result = await sendToClaudeCode({ source: "http", content: "data" });

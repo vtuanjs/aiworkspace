@@ -21,11 +21,11 @@ vi.mock("../store/workspace", () => ({
 }));
 
 const mockProjectsStore = vi.hoisted(() => ({
-  activeProjectId: "proj-1",
-  projects: [{ id: "proj-1", path: "/proj", name: "My Project" }],
+  activeWorkspaceId: "proj-1",
+  workspaces: [{ id: "proj-1", path: "/proj", name: "My Project" }],
 }));
-vi.mock("../store/projects", () => ({
-  useProjectsStore: { getState: () => mockProjectsStore },
+vi.mock("../store/workspaces", () => ({
+  useWorkspacesStore: { getState: () => mockProjectsStore },
 }));
 
 const mockEnvironmentStore = vi.hoisted(() => ({
@@ -74,7 +74,7 @@ describe("initMcpBridge", () => {
     mockEnvironmentStore.switchEnvironment.mockReset();
     mockEnvironmentStore.captureToken.mockReset();
     mockEnvironmentStore.getActiveRuntimeTokens.mockReturnValue({ TOKEN: "tok-abc" });
-    mockProjectsStore.activeProjectId = "proj-1";
+    mockProjectsStore.activeWorkspaceId = "proj-1";
   });
 
   it("registers a listener for mcp:tool_call", () => {
@@ -165,7 +165,7 @@ describe("initMcpBridge", () => {
     });
 
     it("returns empty result when no active project", async () => {
-      mockProjectsStore.activeProjectId = null as unknown as string;
+      mockProjectsStore.activeWorkspaceId = null as unknown as string;
       const bridge = setupBridge();
 
       const result = await bridge.call("e3", "env_get_variables");
@@ -194,7 +194,7 @@ describe("initMcpBridge", () => {
     });
 
     it("returns an error when no active project", async () => {
-      mockProjectsStore.activeProjectId = null as unknown as string;
+      mockProjectsStore.activeWorkspaceId = null as unknown as string;
       const bridge = setupBridge();
 
       const result = await bridge.call("s3", "env_switch", { environment: "prod" });
@@ -245,7 +245,7 @@ describe("initMcpBridge", () => {
     });
 
     it("returns null project fields when no active project", async () => {
-      mockProjectsStore.activeProjectId = null as unknown as string;
+      mockProjectsStore.activeWorkspaceId = null as unknown as string;
       const bridge = setupBridge();
 
       const result = await bridge.call("w2", "workspace_get_context");
