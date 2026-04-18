@@ -1,0 +1,377 @@
+{
+  "project": "MonoCode",
+  "version": "1.0",
+  "source": "monocode-architecture.md",
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Initialize Tauri 2 + React project scaffold",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Scaffold a runnable Tauri 2 + React 18 + Vite project matching the directory layout in architecture §3.2.",
+      "input": [
+        "Empty monocode/ directory",
+        "Architecture doc §3.2 (project structure)"
+      ],
+      "output": [
+        "Runnable `npm run dev` with a Tauri window showing a blank React app",
+        "Cargo.toml workspace root",
+        "src-tauri/ and src/ directories matching §3.2 layout"
+      ],
+      "acceptance_criteria": [
+        "`npm run dev` opens a native window without errors",
+        "src-tauri/src/main.rs registers zero commands (placeholder only)",
+        "src/App.tsx renders a placeholder div",
+        "ESLint and Rust clippy both pass cleanly"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": 2,
+      "name": "Implement config.rs — .monocode JSON read/write",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Typed read/write functions for every JSON file under ~/.monocode/ and <project>/.monocode/. The only module in the codebase that performs file I/O.",
+      "input": [
+        "Architecture doc §3.4 (storage layout)",
+        "~/.monocode/ and <project>/.monocode/ file schemas"
+      ],
+      "output": [
+        "src-tauri/src/config.rs with typed read/write functions for projects.json, workspace.json, environments.json, collections.json, secrets.json"
+      ],
+      "acceptance_criteria": [
+        "Each file type has a dedicated read/write function returning a typed Rust struct",
+        "Missing files return a typed default (not an error)",
+        "Secrets files are created with 0600 permissions",
+        "No other Rust module does direct file I/O — all goes through config.rs"
+      ],
+      "depends_on": [1]
+    },
+    {
+      "id": 3,
+      "name": "Implement pty_manager.rs — terminal process lifecycle",
+      "priority": "P0",
+      "status": "completed",
+      "description": "PTY lifecycle management using portable-pty and tmux for session persistence.",
+      "input": [
+        "Architecture doc §2.3",
+        "portable-pty crate",
+        "tmux for session persistence"
+      ],
+      "output": [
+        "src-tauri/src/pty_manager.rs",
+        "src-tauri/src/commands/terminal.rs exposing create_terminal, write_terminal, resize_terminal, close_terminal Tauri commands"
+      ],
+      "acceptance_criteria": [
+        "create_terminal spawns a tmux session and returns a terminal ID",
+        "write_terminal writes bytes to the PTY stdin",
+        "resize_terminal sends SIGWINCH with new cols/rows",
+        "Terminal session survives app restart (tmux keeps it alive)",
+        "Closing the app does not kill the tmux session"
+      ],
+      "depends_on": [1]
+    },
+    {
+      "id": 4,
+      "name": "Create projects.ts Zustand store",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Zustand store for the project list and active project ID. Source of truth for which projects exist.",
+      "input": [
+        "Architecture doc §3.2",
+        "~/.monocode/projects.json schema [{id, name, path, color, lastOpened}]"
+      ],
+      "output": [
+        "src/store/projects.ts with full CRUD actions"
+      ],
+      "acceptance_criteria": [
+        "Actions: loadProjects, addProject, removeProject, setActiveProject",
+        "All mutations call Tauri commands/projects.rs — store never writes files directly",
+        "activeProjectId is the single source of truth for which project is selected",
+        "No workspace state in this store (that belongs in workspace.ts)"
+      ],
+      "depends_on": [2]
+    },
+    {
+      "id": 5,
+      "name": "Create workspace.ts Zustand store",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Per-project panel state store, scoped to the active project. Resets and reloads on project switch.",
+      "input": [
+        "Architecture doc §3.2",
+        "<project>/.monocode/workspace.json schema {activePanel, browserUrl, openFiles}"
+      ],
+      "output": [
+        "src/store/workspace.ts scoped to the active project"
+      ],
+      "acceptance_criteria": [
+        "State resets and reloads from disk whenever activeProjectId changes in projects.ts",
+        "Actions: setActivePanel, setBrowserUrl, setOpenFiles",
+        "All mutations persist to workspace.json via Tauri — no direct file writes from React",
+        "projects.ts and workspace.ts share no state fields"
+      ],
+      "depends_on": [2, 4]
+    },
+    {
+      "id": 6,
+      "name": "Build ProjectList sidebar component",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Left sidebar showing all projects with add (+) button, active highlight, and sub-200ms switching.",
+      "input": [
+        "projects.ts store",
+        "Architecture doc §5.1 (switching flow)",
+        "Architecture doc §5.3 (add project flow)"
+      ],
+      "output": [
+        "src/components/ProjectList/ — left sidebar listing projects with add (+) button"
+      ],
+      "acceptance_criteria": [
+        "Clicking a project calls switchProject and completes in <200ms (§5.1)",
+        "(+) button triggers native Tauri folder picker dialog",
+        "Active project is visually highlighted",
+        "Component reads only from projects.ts store — no direct Tauri calls",
+        "Switching saves current workspace.json then loads new one before re-rendering"
+      ],
+      "depends_on": [4, 5]
+    },
+    {
+      "id": 7,
+      "name": "Build TerminalPanel component with xterm.js",
+      "priority": "P0",
+      "status": "completed",
+      "description": "xterm.js terminal panel connected to PTY. Hosts Claude Code.",
+      "input": [
+        "Architecture doc §2.3",
+        "pty_manager.rs commands",
+        "xterm.js + @xterm/addon-fit"
+      ],
+      "output": [
+        "src/components/panels/TerminalPanel/ rendering a full PTY terminal"
+      ],
+      "acceptance_criteria": [
+        "xterm.js renders in the panel and connects to a PTY via create_terminal on mount",
+        "Keyboard input is forwarded to PTY via write_terminal",
+        "Terminal resizes correctly when panel resizes (SIGWINCH)",
+        "Terminal state (tmux session name) is stored in workspace.json so it reconnects on restart",
+        "Claude Code can be launched inside the terminal and operates normally"
+      ],
+      "depends_on": [3, 5]
+    },
+    {
+      "id": 8,
+      "name": "Implement sendToClaudeCode.ts — core PTY integration",
+      "priority": "P0",
+      "status": "completed",
+      "description": "The reason the app exists. Pipes runtime context into the active Claude Code session via MCP (primary) or PTY write (fallback).",
+      "input": [
+        "Architecture doc §4.1–§4.3",
+        "Architecture doc §8.6 unified routing model",
+        "Active terminal ID from workspace.ts"
+      ],
+      "output": [
+        "src/lib/sendToClaudeCode.ts with sendToClaudeCode(context) and formatContext(ctx)"
+      ],
+      "acceptance_criteria": [
+        "Primary transport: writes to .claude/inbox/NNNN.md and emits MCP notification when MCP session is active",
+        "Fallback transport: writes formatted string to PTY via write_terminal with '——— MonoCode context ———' marker",
+        "UI badge shows which transport was used (MCP or PTY)",
+        "After sending, terminal panel scrolls into view",
+        "Send button flashes green for 1 second after send",
+        "This is the ONLY file in the codebase that calls write_terminal"
+      ],
+      "depends_on": [7, 10]
+    },
+    {
+      "id": 9,
+      "name": "Implement MCP server — mcp_server.rs + mcp_tools.rs",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Local MCP server (Tauri sidecar) exposing all 20 tools from §8.2 over stdio.",
+      "input": [
+        "Architecture doc §8.1–§8.2",
+        "MCP protocol spec",
+        "Tool table in §8.2"
+      ],
+      "output": [
+        "src-tauri/src/mcp_server.rs (stdio MCP handler)",
+        "src-tauri/src/mcp_tools.rs (tool definitions and dispatch)"
+      ],
+      "acceptance_criteria": [
+        "MCP server starts as Tauri sidecar on app launch",
+        "All 20 tools from §8.2 are defined with correct input/output schemas",
+        "Tool calls are dispatched to mcp_bridge.rs — mcp_tools.rs contains no business logic",
+        "`monocode-mcp --list-tools` prints all tools in MCP format",
+        "Server communicates over stdio only (no network port)"
+      ],
+      "depends_on": [1]
+    },
+    {
+      "id": 10,
+      "name": "Implement mcp_bridge.rs + mcpBridge.ts — IPC bridge",
+      "priority": "P0",
+      "status": "completed",
+      "description": "IPC bridge between MCP sidecar and main Tauri window. Enforces destructive query gate and secret redaction.",
+      "input": [
+        "Architecture doc §8.5",
+        "Architecture doc §10.4 (destructive query gate)",
+        "mcp_server.rs"
+      ],
+      "output": [
+        "src-tauri/src/mcp_bridge.rs (Rust IPC bridge)",
+        "src/lib/mcpBridge.ts (React-side handler)"
+      ],
+      "acceptance_criteria": [
+        "mcp_bridge.rs forwards MCP tool calls to the main Tauri window via Tauri events",
+        "mcpBridge.ts listens for events and executes them against panel state",
+        "Destructive SQL gate (is_destructive() from §10.4) is enforced in mcp_bridge.rs before any db_query executes",
+        "Secrets are stripped from all MCP tool responses before returning to Claude Code",
+        "Browser panel WebView has IPC disabled — cannot reach mcp_bridge.rs (§13.1)"
+      ],
+      "depends_on": [9]
+    },
+    {
+      "id": 11,
+      "name": "Write .claude/mcp.json on project open",
+      "priority": "P0",
+      "status": "completed",
+      "description": "Auto-configuration of Claude Code's MCP connection when a project opens. Must respect existing config (§12 R5).",
+      "input": [
+        "Architecture doc §8.3",
+        "config.rs",
+        "projects.ts switchProject action"
+      ],
+      "output": [
+        "Auto-written .claude/mcp.json in project root on every project open"
+      ],
+      "acceptance_criteria": [
+        "File is written with correct monocode-mcp command and --project path on project open",
+        "If .claude/mcp.json already exists, prompt the developer before overwriting (§12 R5)",
+        "`.claude/mcp.json` is added to project .gitignore automatically",
+        "A global 'never auto-configure MCP' toggle in settings suppresses this behavior"
+      ],
+      "depends_on": [2, 4, 9]
+    },
+    {
+      "id": 12,
+      "name": "Build BrowserPanel with console capture",
+      "priority": "P1",
+      "status": "completed",
+      "description": "Embedded WebView with JS error and network failure capture. Each error has a Send to Claude Code button.",
+      "input": [
+        "Architecture doc §2.4",
+        "MCP tools: browser_navigate, browser_get_console_logs, browser_screenshot, browser_get_dom, browser_click, browser_fill"
+      ],
+      "output": [
+        "src/components/panels/BrowserPanel/ — embedded WebView + console log sidebar + Send to Claude Code button per error"
+      ],
+      "acceptance_criteria": [
+        "WebView navigates to URLs stored in workspace.json (per-project browser URL)",
+        "JS errors and network failures appear in the console sidebar",
+        "Each console entry has a 'Send to Claude Code' button that calls sendToClaudeCode.ts",
+        "MCP tools browser_navigate, browser_screenshot, browser_get_console_logs work end-to-end",
+        "WebView runs in a separate partition with Tauri IPC disabled"
+      ],
+      "depends_on": [5, 8, 10]
+    },
+    {
+      "id": 13,
+      "name": "Build HttpPanel with shared executor and request log",
+      "priority": "P1",
+      "status": "completed",
+      "description": "Postman-equivalent HTTP client. Shared executor used by both Send button and MCP — one code path, one log.",
+      "input": [
+        "Architecture doc §2.5",
+        "Architecture doc §9.1–§9.4",
+        "MCP tools: http_request, http_get_collections, http_save_to_collection"
+      ],
+      "output": [
+        "src/components/panels/HttpPanel/",
+        "src/lib/httpExecutor.ts"
+      ],
+      "acceptance_criteria": [
+        "httpExecutor.ts is the single HTTP execution path — used by both Send button and MCP bridge",
+        "Request log shows [You] or [Claude Code] source label per entry (§9.2)",
+        "Clicking a log entry loads it into the request editor",
+        "Collections stored in .monocode/http/collections.json (git-tracked)",
+        "Request log is session-only (not persisted to disk)",
+        "Environment variable interpolation ({{base_url}}) resolves correctly at fire time"
+      ],
+      "depends_on": [2, 5, 10, 15]
+    },
+    {
+      "id": 14,
+      "name": "Build DbPanel with query log and destructive gate UI",
+      "priority": "P1",
+      "status": "completed",
+      "description": "Unified database + cache panel (PostgreSQL, MySQL, MongoDB, Redis). Destructive MCP queries surface a confirmation dialog.",
+      "input": [
+        "Architecture doc §2.6",
+        "Architecture doc §10.1–§10.5",
+        "MCP tools: db_query, db_list_connections, db_list_tables, db_describe_table, cache_get, cache_set, cache_keys, cache_flush"
+      ],
+      "output": [
+        "src/components/panels/DbPanel/ — query editor, schema browser, query log, confirmation dialog"
+      ],
+      "acceptance_criteria": [
+        "Supports PostgreSQL, MySQL, MongoDB, Redis connections",
+        "Query log shows [You], [Claude Code], [BLOCKED] source labels (§10.3)",
+        "Destructive queries from MCP trigger a developer confirmation dialog — Claude Code waits for response",
+        "Developer-initiated queries in the editor are NOT gated",
+        "Connections stored in .monocode/connections.json (gitignored)",
+        "cache_flush always shows confirmation dialog regardless of pattern"
+      ],
+      "depends_on": [2, 5, 10, 15]
+    },
+    {
+      "id": 15,
+      "name": "Implement environment + secrets system",
+      "priority": "P1",
+      "status": "pending",
+      "description": "Named environment sets with variable interpolation. Four-tier resolution. Secrets never leave the main process.",
+      "input": [
+        "Architecture doc §11.1–§11.5",
+        "environments.json + secrets.json schemas",
+        "MCP tools: env_get_variables, env_switch, token_capture"
+      ],
+      "output": [
+        "Environment store slice",
+        "Variable resolution function",
+        "Environment switcher UI"
+      ],
+      "acceptance_criteria": [
+        "Resolution order matches §11.2: runtime tokens → env plain values → project secrets → global secrets",
+        "{{variable}} references in requests, queries, and connection strings resolve at fire time",
+        "Unresolved variables shown in red in the UI",
+        "MCP env_get_variables returns plain values only — secrets redacted as {{SECRET}}",
+        "Token capture rule on HTTP request stores result in memory (Zustand) with optional TTL",
+        "environments.json is git-tracked; secrets.json is always gitignored"
+      ],
+      "depends_on": [2, 5, 10]
+    },
+    {
+      "id": 16,
+      "name": "Build EditorPanel with Monaco",
+      "priority": "P2",
+      "status": "completed",
+      "description": "Monaco-based file viewer/editor for reading files Claude Code just edited. Not a full IDE replacement.",
+      "input": [
+        "Architecture doc §2.7",
+        "workspace.ts openFiles state",
+        "MCP tool: workspace_get_context"
+      ],
+      "output": [
+        "src/components/panels/EditorPanel/ — Monaco-based file viewer/editor"
+      ],
+      "acceptance_criteria": [
+        "Opens files listed in workspace.json openFiles on panel mount",
+        "File reads go through commands/fs.rs — no direct filesystem access from React",
+        "workspace_get_context MCP tool returns active file, open files, and project path",
+        "Read-only by default; edits require explicit opt-in (no accidental overwrites)",
+        "Language mode auto-detected from file extension"
+      ],
+      "depends_on": [5, 10]
+    }
+  ]
+}
