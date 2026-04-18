@@ -1,7 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, Component, ReactNode } from "react";
 import ProjectList from "./components/ProjectList";
 import Workspace from "./components/Workspace";
+import StatusBar from "./components/StatusBar";
 import { initMcpBridge } from "./lib/mcpBridge";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: "#f38ba8", fontFamily: "monospace", background: "#1e1e2e", height: "100vh" }}>
+          <h2 style={{ color: "#f38ba8" }}>Render error</h2>
+          <pre style={{ whiteSpace: "pre-wrap", color: "#cdd6f4" }}>{String(this.state.error)}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   useEffect(() => {
@@ -10,9 +27,14 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <ProjectList />
-      <Workspace />
-    </div>
+    <ErrorBoundary>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#1e1e2e", overflow: "hidden" }}>
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          <ProjectList />
+          <Workspace />
+        </div>
+        <StatusBar />
+      </div>
+    </ErrorBoundary>
   );
 }

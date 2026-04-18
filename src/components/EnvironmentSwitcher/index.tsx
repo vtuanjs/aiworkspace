@@ -122,7 +122,7 @@ export default function EnvironmentSwitcher() {
             <div style={{ padding: "8px 12px", color: "#6c7086", fontSize: 11 }}>
               No environments configured.
               <br />
-              Add to .monocode/environments.json
+              Add to .aiworkspace/environments.json
             </div>
           )}
 

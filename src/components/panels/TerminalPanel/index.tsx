@@ -74,7 +74,7 @@ export default function TerminalPanel() {
       terminalId,
       projectPath: project.path,
     }).catch((err) => {
-      term.writeln(`\x1b[31m[MonoCode] Failed to create terminal: ${err}\x1b[0m`);
+      term.writeln(`\x1b[31m[AIWorkspace] Failed to create terminal: ${err}\x1b[0m`);
     });
 
     // Forward keyboard / paste input to PTY

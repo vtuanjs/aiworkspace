@@ -46,7 +46,7 @@ export default function DbPanel() {
         source: QUERY_SOURCE.YOU,
         sql,
         result: null,
-        error: "No database connected. Configure a connection in .monocode/connections.json.",
+        error: "No database connected. Configure a connection in .aiworkspace/connections.json.",
         timestamp: Date.now(),
       },
       ...prev,

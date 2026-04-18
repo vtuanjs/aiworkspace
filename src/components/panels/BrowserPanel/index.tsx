@@ -110,7 +110,7 @@ export default function BrowserPanel() {
                 const msg = Array.from(arguments).map(function(a) {
                   return typeof a === 'object' ? JSON.stringify(a) : String(a);
                 }).join(' ');
-                window.__monocode_log && window.__monocode_log(level, msg);
+                window.__aiworkspace_log && window.__aiworkspace_log(level, msg);
               } catch(_) {}
             };
           });
