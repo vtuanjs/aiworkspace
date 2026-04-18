@@ -893,6 +893,7 @@ function SidePanel({ width, view }: { width: number; view: SideView }) {
 
 function RightPanel({ width, onResize }: { width: number; onResize: (w: number) => void }) {
   const [activeTab, setActiveTab] = useState<RightTabId>("browser");
+  const { activeWorkspaceId } = useWorkspacesStore();
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -969,9 +970,9 @@ function RightPanel({ width, onResize }: { width: number; onResize: (w: number) 
 
         {/* Tab content */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {activeTab === "browser" && <BrowserPanel />}
-          {activeTab === "http"    && <HttpPanel />}
-          {activeTab === "db"      && <DbPanel />}
+          {activeTab === "browser" && <BrowserPanel key={activeWorkspaceId ?? "none"} />}
+          {activeTab === "http"    && <HttpPanel    key={activeWorkspaceId ?? "none"} />}
+          {activeTab === "db"      && <DbPanel      key={activeWorkspaceId ?? "none"} />}
         </div>
       </div>
     </div>
