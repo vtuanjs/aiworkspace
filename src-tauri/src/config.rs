@@ -63,11 +63,38 @@ pub struct DbCollections {
     pub collections: Vec<serde_json::Value>,
 }
 
+// ── App settings (always at ~/.aiworkspace/settings.json) ────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct AppSettings {
+    pub storage_dir: Option<String>,
+    pub hotkeys: std::collections::HashMap<String, String>,
+}
+
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
-fn aiworkspace_dir() -> anyhow::Result<PathBuf> {
+/// Config base — always ~/.aiworkspace, regardless of storage_dir setting.
+/// settings.json itself must live here so we can bootstrap.
+fn base_dir() -> anyhow::Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("cannot find home directory"))?;
     Ok(home.join(".aiworkspace"))
+}
+
+/// Data storage dir — reads storage_dir from settings.json if present.
+/// All non-settings global data (projects.json, secrets.json) goes here.
+fn aiworkspace_dir() -> anyhow::Result<PathBuf> {
+    let base = base_dir()?;
+    let settings_path = base.join("settings.json");
+    if settings_path.exists() {
+        if let Ok(raw) = fs::read_to_string(&settings_path) {
+            if let Ok(s) = serde_json::from_str::<AppSettings>(&raw) {
+                if let Some(dir) = s.storage_dir {
+                    return Ok(PathBuf::from(dir));
+                }
+            }
+        }
+    }
+    Ok(base)
 }
 
 fn project_aiworkspace_dir(project_path: &str) -> PathBuf {
@@ -122,6 +149,20 @@ fn write_secrets_file(path: &Path, data: &str) -> anyhow::Result<()> {
     }
     fs::write(path, data)?;
     Ok(())
+}
+
+// ── App settings ──────────────────────────────────────────────────────────────
+
+pub fn read_app_settings() -> anyhow::Result<AppSettings> {
+    let dir = base_dir()?;
+    ensure_dir(&dir)?;
+    read_json(&dir.join("settings.json"))
+}
+
+pub fn write_app_settings(settings: &AppSettings) -> anyhow::Result<()> {
+    let dir = base_dir()?;
+    ensure_dir(&dir)?;
+    write_json(&dir.join("settings.json"), settings)
 }
 
 // ── Global projects.json ──────────────────────────────────────────────────────

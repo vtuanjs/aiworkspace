@@ -30,6 +30,7 @@ fn main() {
             commands::fs::rename_entry,
             commands::fs::delete_entry,
             commands::fs::reveal_in_finder,
+            commands::fs::search_in_files,
             commands::git::git_status,
             commands::git::git_log,
             commands::git::git_stage,
@@ -39,6 +40,8 @@ fn main() {
             commands::environment::get_environments,
             commands::environment::set_active_environment,
             commands::environment::resolve_variables,
+            commands::settings::get_app_settings,
+            commands::settings::save_app_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
