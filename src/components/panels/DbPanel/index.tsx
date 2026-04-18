@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { sendToClaudeCode } from "../../../lib/sendToClaudeCode";
+import { useWorkspaceStore } from "../../../store/workspace";
 
 export const QUERY_SOURCE = {
   YOU: "YOU",
@@ -32,7 +33,7 @@ function formatTimestamp(ts: number): string {
 }
 
 export default function DbPanel() {
-  const [query, setQuery] = useState("");
+  const { dbQuery: query, setDbQuery: setQuery } = useWorkspaceStore();
   const [queryLog, setQueryLog] = useState<QueryLogEntry[]>([]);
   const [confirmPending, setConfirmPending] = useState<string | null>(null);
   const [sendingToCC, setSendingToCC] = useState<string | null>(null);
