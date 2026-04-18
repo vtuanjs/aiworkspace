@@ -26,12 +26,16 @@ export interface WorkspaceState {
   browserUrl: string;
   openFiles: string[];
   activeFile: string | null;
+  activeFileLine: number | null;
+  searchQuery: string | null;
   previewFile: string | null;
   activeTerminalId: string | null;
   setActivePanel: (panel: Panel) => void;
   setBrowserUrl: (url: string) => void;
   setOpenFiles: (files: string[]) => void;
   setActiveFile: (file: string | null) => void;
+  setActiveFileLine: (line: number | null) => void;
+  setSearchQuery: (q: string | null) => void;
   setPreviewFile: (file: string | null) => void;
   setActiveTerminalId: (id: string | null) => void;
   loadFromDisk: (projectPath: string) => Promise<void>;
@@ -47,6 +51,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   browserUrl: "",
   openFiles: [],
   activeFile: null,
+  activeFileLine: null,
+  searchQuery: null,
   previewFile: null,
   activeTerminalId: null,
 
@@ -54,6 +60,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setBrowserUrl: (url) => set({ browserUrl: url }),
   setOpenFiles: (files) => set({ openFiles: files }),
   setActiveFile: (file) => set({ activeFile: file }),
+  setActiveFileLine: (line) => set({ activeFileLine: line }),
+  setSearchQuery: (q) => set({ searchQuery: q }),
   setPreviewFile: (file) => set({ previewFile: file }),
   setActiveTerminalId: (id) => set({ activeTerminalId: id }),
 
