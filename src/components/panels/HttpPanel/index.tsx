@@ -10,6 +10,7 @@ import {
 import { sendToClaudeCode } from "../../../lib/sendToClaudeCode";
 import { resolveVariables } from "../../../lib/resolveVariables";
 import { useEnvironmentStore } from "../../../store/environment";
+import { useWorkspaceStore } from "../../../store/workspace";
 
 export const HTTP_METHOD = {
   GET: "GET",
@@ -75,15 +76,17 @@ function SectionHeader({
 }
 
 export default function HttpPanel() {
-  const [method, setMethod] = useState<HttpMethod>(HTTP_METHOD.GET);
-  const [url, setUrl] = useState("");
-  const [body, setBody] = useState("");
-  const [headersText, setHeadersText] = useState('{\n  "Content-Type": "application/json"\n}');
+  const {
+    httpMethod: method, setHttpMethod: setMethod,
+    httpUrl: url, setHttpUrl: setUrl,
+    httpBody: body, setHttpBody: setBody,
+    httpHeadersText: headersText, setHttpHeadersText: setHeadersText,
+    httpRequestTab: requestTab, setHttpRequestTab: setRequestTab,
+  } = useWorkspaceStore();
   const [log, setLog] = useState<HttpLogEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<HttpLogEntry | null>(null);
   const [sendingToCC, setSendingToCC] = useState<string | null>(null);
-  const [requestTab, setRequestTab] = useState<"body" | "headers">("body");
 
   const [requestOpen, setRequestOpen] = useState(true);
   const [responseOpen, setResponseOpen] = useState(true);
@@ -149,13 +152,13 @@ export default function HttpPanel() {
       >
         <select
           value={method}
-          onChange={(e) => setMethod(e.target.value as HttpMethod)}
+          onChange={(e) => setMethod(e.target.value)}
           style={{
             background: "#313244",
             border: "1px solid #45475a",
             borderRadius: 4,
             padding: "5px 6px",
-            color: METHOD_COLOR[method],
+            color: METHOD_COLOR[method as HttpMethod],
             fontWeight: 700,
             fontSize: 12,
             cursor: "pointer",
