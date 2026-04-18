@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
@@ -76,6 +77,119 @@ pub fn reveal_in_finder(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct SearchMatch {
+    pub file_path: String,
+    pub line_number: usize,
+    pub line: String,
+    pub match_start: usize,
+    pub match_end: usize,
+}
+
+const SKIP_DIRS: &[&str] = &[
+    ".git", "node_modules", "target", "dist", ".next", "build",
+    ".aiworkspace", "__pycache__", ".cache", "coverage",
+];
+
+#[tauri::command]
+pub fn search_in_files(
+    project_path: String,
+    query: String,
+    case_sensitive: bool,
+    whole_word: bool,
+    use_regex: bool,
+) -> Result<Vec<SearchMatch>, String> {
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let pattern = if use_regex {
+        query.clone()
+    } else {
+        regex::escape(&query)
+    };
+
+    let pattern = if whole_word {
+        format!(r"\b{}\b", pattern)
+    } else {
+        pattern
+    };
+
+    let re = if case_sensitive {
+        Regex::new(&pattern)
+    } else {
+        Regex::new(&format!("(?i){}", pattern))
+    }
+    .map_err(|e| e.to_string())?;
+
+    let mut results: Vec<SearchMatch> = Vec::new();
+    search_dir(Path::new(&project_path), &re, &mut results, 0);
+    Ok(results)
+}
+
+fn search_dir(dir: &Path, re: &Regex, results: &mut Vec<SearchMatch>, depth: u8) {
+    if depth > 8 {
+        return;
+    }
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.starts_with('.') || SKIP_DIRS.contains(&name) {
+            continue;
+        }
+        if path.is_dir() {
+            search_dir(&path, re, results, depth + 1);
+        } else if path.is_file() {
+            search_file(&path, re, results);
+        }
+    }
+}
+
+fn search_file(path: &Path, re: &Regex, results: &mut Vec<SearchMatch>) {
+    // Skip likely binary files by extension
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    const BINARY_EXTS: &[&str] = &[
+        "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp",
+        "pdf", "zip", "tar", "gz", "bz2", "7z", "rar",
+        "exe", "dll", "so", "dylib", "a", "o",
+        "woff", "woff2", "ttf", "otf", "eot",
+        "mp3", "mp4", "mov", "avi", "webm",
+        "lock",
+    ];
+    if BINARY_EXTS.contains(&ext) {
+        return;
+    }
+
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    // Limit per-file results to avoid flooding
+    let mut file_matches = 0;
+    for (line_idx, line) in content.lines().enumerate() {
+        for m in re.find_iter(line) {
+            results.push(SearchMatch {
+                file_path: path.to_string_lossy().into_owned(),
+                line_number: line_idx + 1,
+                line: line.to_string(),
+                match_start: m.start(),
+                match_end: m.end(),
+            });
+            file_matches += 1;
+            if file_matches >= 100 {
+                return;
+            }
+        }
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
