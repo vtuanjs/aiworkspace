@@ -66,6 +66,7 @@ describe("useWorkspaceStore", () => {
   });
 
 
+  describe("loadFromDisk", () => {
     it("loads and translates snake_case JSON to camelCase state", async () => {
       mockInvoke.mockResolvedValue(
         JSON.stringify({
