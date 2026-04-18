@@ -1,0 +1,89 @@
+// Per-project panel state.
+// Never holds the project list — that lives in projects.ts.
+
+import { invoke } from "@tauri-apps/api/core";
+import { create } from "zustand";
+
+export const PANEL = {
+  TERMINAL: "TERMINAL",
+  BROWSER: "BROWSER",
+  HTTP: "HTTP",
+  DB: "DB",
+  EDITOR: "EDITOR",
+} as const;
+export type Panel = typeof PANEL[keyof typeof PANEL];
+
+// Shape stored in <project>/.monocode/workspace.json
+interface WorkspaceDiskData {
+  active_panel?: string;
+  browser_url?: string;
+  open_files?: string[];
+  active_terminal_id?: string | null;
+}
+
+export interface WorkspaceState {
+  activePanel: Panel;
+  browserUrl: string;
+  openFiles: string[];
+  activeTerminalId: string | null;
+  setActivePanel: (panel: Panel) => void;
+  setBrowserUrl: (url: string) => void;
+  setOpenFiles: (files: string[]) => void;
+  setActiveTerminalId: (id: string | null) => void;
+  loadFromDisk: (projectPath: string) => Promise<void>;
+  saveToDisk: (projectPath: string) => Promise<void>;
+}
+
+function isValidPanel(value: unknown): value is Panel {
+  return typeof value === "string" && Object.values(PANEL).includes(value as Panel);
+}
+
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
+  activePanel: PANEL.TERMINAL,
+  browserUrl: "",
+  openFiles: [],
+  activeTerminalId: null,
+
+  setActivePanel: (panel) => set({ activePanel: panel }),
+  setBrowserUrl: (url) => set({ browserUrl: url }),
+  setOpenFiles: (files) => set({ openFiles: files }),
+  setActiveTerminalId: (id) => set({ activeTerminalId: id }),
+
+  loadFromDisk: async (projectPath: string) => {
+    try {
+      const raw = await invoke<string>("read_file", {
+        path: `${projectPath}/.monocode/workspace.json`,
+      });
+      const ws: WorkspaceDiskData = JSON.parse(raw);
+      set({
+        activePanel: isValidPanel(ws.active_panel) ? ws.active_panel : PANEL.TERMINAL,
+        browserUrl: typeof ws.browser_url === "string" ? ws.browser_url : "",
+        openFiles: Array.isArray(ws.open_files) ? ws.open_files : [],
+        activeTerminalId:
+          typeof ws.active_terminal_id === "string" ? ws.active_terminal_id : null,
+      });
+    } catch {
+      // File may not exist yet — keep defaults
+      set({
+        activePanel: PANEL.TERMINAL,
+        browserUrl: "",
+        openFiles: [],
+        activeTerminalId: null,
+      });
+    }
+  },
+
+  saveToDisk: async (projectPath: string) => {
+    const { activePanel, browserUrl, openFiles, activeTerminalId } = get();
+    const data: WorkspaceDiskData = {
+      active_panel: activePanel,
+      browser_url: browserUrl,
+      open_files: openFiles,
+      active_terminal_id: activeTerminalId,
+    };
+    await invoke("write_file", {
+      path: `${projectPath}/.monocode/workspace.json`,
+      content: JSON.stringify(data, null, 2),
+    });
+  },
+}));
