@@ -1,7 +1,7 @@
 {
-  "productName": "MonoCode",
+  "productName": "AIWorkspace",
   "version": "0.1.0",
-  "identifier": "com.monocode.app",
+  "identifier": "com.aiworkspace.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "MonoCode",
+        "title": "AIWorkspace",
         "width": 1400,
         "height": 900,
         "resizable": true,
