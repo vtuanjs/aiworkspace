@@ -38,13 +38,41 @@ describe("useWorkspaceStore", () => {
     });
   });
 
-  describe("loadFromDisk", () => {
+  describe("resetForSwitch", () => {
+    it("clears all panel state to defaults", () => {
+      useWorkspaceStore.setState({
+        activePanel: PANEL.HTTP,
+        browserUrl: "http://old",
+        openFiles: ["src/App.tsx"],
+        activeFile: "src/App.tsx",
+        activeFileLine: 42,
+        searchQuery: "foo",
+        previewFile: "src/main.tsx",
+        activeTerminalId: "term-1",
+      });
+
+      useWorkspaceStore.getState().resetForSwitch();
+
+      const state = useWorkspaceStore.getState();
+      expect(state.activePanel).toBe(PANEL.TERMINAL);
+      expect(state.browserUrl).toBe("");
+      expect(state.openFiles).toEqual([]);
+      expect(state.activeFile).toBeNull();
+      expect(state.activeFileLine).toBeNull();
+      expect(state.searchQuery).toBeNull();
+      expect(state.previewFile).toBeNull();
+      expect(state.activeTerminalId).toBeNull();
+    });
+  });
+
+
     it("loads and translates snake_case JSON to camelCase state", async () => {
       mockInvoke.mockResolvedValue(
         JSON.stringify({
           active_panel: "BROWSER",
           browser_url: "https://example.com",
           open_files: ["src/App.tsx"],
+          active_file: "src/App.tsx",
           active_terminal_id: "term-1",
         })
       );
@@ -55,6 +83,7 @@ describe("useWorkspaceStore", () => {
       expect(state.activePanel).toBe(PANEL.BROWSER);
       expect(state.browserUrl).toBe("https://example.com");
       expect(state.openFiles).toEqual(["src/App.tsx"]);
+      expect(state.activeFile).toBe("src/App.tsx");
       expect(state.activeTerminalId).toBe("term-1");
       expect(mockInvoke).toHaveBeenCalledWith("read_file", {
         path: "/proj/.aiworkspace/workspace.json",
@@ -102,6 +131,7 @@ describe("useWorkspaceStore", () => {
         activePanel: PANEL.HTTP,
         browserUrl: "http://localhost",
         openFiles: ["src/main.tsx"],
+        activeFile: "src/main.tsx",
         activeTerminalId: "term-99",
       });
 
@@ -116,6 +146,7 @@ describe("useWorkspaceStore", () => {
       expect(written.active_panel).toBe("HTTP");
       expect(written.browser_url).toBe("http://localhost");
       expect(written.open_files).toEqual(["src/main.tsx"]);
+      expect(written.active_file).toBe("src/main.tsx");
       expect(written.active_terminal_id).toBe("term-99");
     });
   });

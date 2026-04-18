@@ -18,6 +18,7 @@ interface WorkspaceDiskData {
   active_panel?: string;
   browser_url?: string;
   open_files?: string[];
+  active_file?: string | null;
   active_terminal_id?: string | null;
 }
 
@@ -38,6 +39,7 @@ export interface WorkspaceState {
   setSearchQuery: (q: string | null) => void;
   setPreviewFile: (file: string | null) => void;
   setActiveTerminalId: (id: string | null) => void;
+  resetForSwitch: () => void;
   loadFromDisk: (projectPath: string) => Promise<void>;
   saveToDisk: (projectPath: string) => Promise<void>;
 }
@@ -65,6 +67,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setPreviewFile: (file) => set({ previewFile: file }),
   setActiveTerminalId: (id) => set({ activeTerminalId: id }),
 
+  resetForSwitch: () => set({
+    activePanel: PANEL.TERMINAL,
+    browserUrl: "",
+    openFiles: [],
+    activeFile: null,
+    activeFileLine: null,
+    searchQuery: null,
+    previewFile: null,
+    activeTerminalId: null,
+  }),
+
   loadFromDisk: async (projectPath: string) => {
     try {
       const raw = await invoke<string>("read_file", {
@@ -75,26 +88,35 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activePanel: isValidPanel(ws.active_panel) ? ws.active_panel : PANEL.TERMINAL,
         browserUrl: typeof ws.browser_url === "string" ? ws.browser_url : "",
         openFiles: Array.isArray(ws.open_files) ? ws.open_files : [],
+        activeFile: typeof ws.active_file === "string" ? ws.active_file : null,
+        activeFileLine: null,
+        searchQuery: null,
+        previewFile: null,
         activeTerminalId:
           typeof ws.active_terminal_id === "string" ? ws.active_terminal_id : null,
       });
     } catch {
-      // File may not exist yet — keep defaults
+      // File may not exist yet — keep defaults (already set by resetForSwitch)
       set({
         activePanel: PANEL.TERMINAL,
         browserUrl: "",
         openFiles: [],
+        activeFile: null,
+        activeFileLine: null,
+        searchQuery: null,
+        previewFile: null,
         activeTerminalId: null,
       });
     }
   },
 
   saveToDisk: async (projectPath: string) => {
-    const { activePanel, browserUrl, openFiles, activeTerminalId } = get();
+    const { activePanel, browserUrl, openFiles, activeFile, activeTerminalId } = get();
     const data: WorkspaceDiskData = {
       active_panel: activePanel,
       browser_url: browserUrl,
       open_files: openFiles,
+      active_file: activeFile,
       active_terminal_id: activeTerminalId,
     };
     await invoke("write_file", {
