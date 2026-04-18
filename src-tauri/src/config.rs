@@ -1,4 +1,4 @@
-// All .monocode JSON reads and writes go through here.
+// All .aiworkspace JSON reads and writes go through here.
 // No other module performs ad-hoc file I/O.
 
 use serde::{Deserialize, Serialize};
@@ -65,13 +65,13 @@ pub struct DbCollections {
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
-fn monocode_dir() -> anyhow::Result<PathBuf> {
+fn aiworkspace_dir() -> anyhow::Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("cannot find home directory"))?;
-    Ok(home.join(".monocode"))
+    Ok(home.join(".aiworkspace"))
 }
 
-fn project_monocode_dir(project_path: &str) -> PathBuf {
-    Path::new(project_path).join(".monocode")
+fn project_aiworkspace_dir(project_path: &str) -> PathBuf {
+    Path::new(project_path).join(".aiworkspace")
 }
 
 pub fn ensure_dir(path: &Path) -> anyhow::Result<()> {
@@ -127,13 +127,13 @@ fn write_secrets_file(path: &Path, data: &str) -> anyhow::Result<()> {
 // ── Global projects.json ──────────────────────────────────────────────────────
 
 pub fn read_projects() -> anyhow::Result<Vec<ProjectEntry>> {
-    let dir = monocode_dir()?;
+    let dir = aiworkspace_dir()?;
     ensure_dir(&dir)?;
     read_json(&dir.join("projects.json"))
 }
 
 pub fn write_projects(projects: &[ProjectEntry]) -> anyhow::Result<()> {
-    let dir = monocode_dir()?;
+    let dir = aiworkspace_dir()?;
     ensure_dir(&dir)?;
     write_json(&dir.join("projects.json"), &projects)
 }
@@ -141,12 +141,12 @@ pub fn write_projects(projects: &[ProjectEntry]) -> anyhow::Result<()> {
 // ── Per-project workspace.json ────────────────────────────────────────────────
 
 pub fn read_workspace(project_path: &str) -> anyhow::Result<WorkspaceState> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     read_json(&dir.join("workspace.json"))
 }
 
 pub fn write_workspace(project_path: &str, state: &WorkspaceState) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     ensure_dir(&dir)?;
     write_json(&dir.join("workspace.json"), state)
 }
@@ -154,12 +154,12 @@ pub fn write_workspace(project_path: &str, state: &WorkspaceState) -> anyhow::Re
 // ── Per-project terminals.json (gitignored) ───────────────────────────────────
 
 pub fn read_terminals(project_path: &str) -> anyhow::Result<Terminals> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     read_json(&dir.join("terminals.json"))
 }
 
 pub fn write_terminals(project_path: &str, terminals: &Terminals) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     ensure_dir(&dir)?;
     write_json(&dir.join("terminals.json"), terminals)
 }
@@ -167,12 +167,12 @@ pub fn write_terminals(project_path: &str, terminals: &Terminals) -> anyhow::Res
 // ── Per-project environments.json (git-tracked) ───────────────────────────────
 
 pub fn read_environments(project_path: &str) -> anyhow::Result<Environments> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     read_json(&dir.join("environments.json"))
 }
 
 pub fn write_environments(project_path: &str, env: &Environments) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     ensure_dir(&dir)?;
     write_json(&dir.join("environments.json"), env)
 }
@@ -180,7 +180,7 @@ pub fn write_environments(project_path: &str, env: &Environments) -> anyhow::Res
 // ── Secrets (0600, gitignored) ────────────────────────────────────────────────
 
 pub fn read_project_secrets(project_path: &str) -> anyhow::Result<Secrets> {
-    let path = project_monocode_dir(project_path).join("secrets.json");
+    let path = project_aiworkspace_dir(project_path).join("secrets.json");
     if !path.exists() {
         return Ok(Secrets::default());
     }
@@ -189,13 +189,13 @@ pub fn read_project_secrets(project_path: &str) -> anyhow::Result<Secrets> {
 }
 
 pub fn write_project_secrets(project_path: &str, secrets: &Secrets) -> anyhow::Result<()> {
-    let path = project_monocode_dir(project_path).join("secrets.json");
+    let path = project_aiworkspace_dir(project_path).join("secrets.json");
     let data = serde_json::to_string_pretty(secrets)?;
     write_secrets_file(&path, &data)
 }
 
 pub fn read_global_secrets() -> anyhow::Result<Secrets> {
-    let path = monocode_dir()?.join("secrets.json");
+    let path = aiworkspace_dir()?.join("secrets.json");
     if !path.exists() {
         return Ok(Secrets::default());
     }
@@ -204,7 +204,7 @@ pub fn read_global_secrets() -> anyhow::Result<Secrets> {
 }
 
 pub fn write_global_secrets(secrets: &Secrets) -> anyhow::Result<()> {
-    let path = monocode_dir()?.join("secrets.json");
+    let path = aiworkspace_dir()?.join("secrets.json");
     let data = serde_json::to_string_pretty(secrets)?;
     write_secrets_file(&path, &data)
 }
@@ -212,12 +212,12 @@ pub fn write_global_secrets(secrets: &Secrets) -> anyhow::Result<()> {
 // ── Per-project connections.json (gitignored) ─────────────────────────────────
 
 pub fn read_connections(project_path: &str) -> anyhow::Result<Connections> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     read_json(&dir.join("connections.json"))
 }
 
 pub fn write_connections(project_path: &str, conns: &Connections) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     ensure_dir(&dir)?;
     write_json(&dir.join("connections.json"), conns)
 }
@@ -225,12 +225,12 @@ pub fn write_connections(project_path: &str, conns: &Connections) -> anyhow::Res
 // ── HTTP collections (git-tracked) ────────────────────────────────────────────
 
 pub fn read_http_collections(project_path: &str) -> anyhow::Result<HttpCollections> {
-    let dir = project_monocode_dir(project_path).join("http");
+    let dir = project_aiworkspace_dir(project_path).join("http");
     read_json(&dir.join("collections.json"))
 }
 
 pub fn write_http_collections(project_path: &str, col: &HttpCollections) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path).join("http");
+    let dir = project_aiworkspace_dir(project_path).join("http");
     ensure_dir(&dir)?;
     write_json(&dir.join("collections.json"), col)
 }
@@ -238,12 +238,12 @@ pub fn write_http_collections(project_path: &str, col: &HttpCollections) -> anyh
 // ── DB collections (git-tracked) ──────────────────────────────────────────────
 
 pub fn read_db_collections(project_path: &str) -> anyhow::Result<DbCollections> {
-    let dir = project_monocode_dir(project_path).join("db");
+    let dir = project_aiworkspace_dir(project_path).join("db");
     read_json(&dir.join("collections.json"))
 }
 
 pub fn write_db_collections(project_path: &str, col: &DbCollections) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path).join("db");
+    let dir = project_aiworkspace_dir(project_path).join("db");
     ensure_dir(&dir)?;
     write_json(&dir.join("collections.json"), col)
 }
@@ -251,16 +251,16 @@ pub fn write_db_collections(project_path: &str, col: &DbCollections) -> anyhow::
 // ── Project setup ─────────────────────────────────────────────────────────────
 
 pub fn init_project_dir(project_path: &str) -> anyhow::Result<()> {
-    let dir = project_monocode_dir(project_path);
+    let dir = project_aiworkspace_dir(project_path);
     ensure_dir(&dir)?;
     ensure_dir(&dir.join("http"))?;
     ensure_dir(&dir.join("db"))?;
 
     let gitignore_path = Path::new(project_path).join(".gitignore");
     let gitignore_entries = [
-        ".monocode/connections.json",
-        ".monocode/terminals.json",
-        ".monocode/secrets.json",
+        ".aiworkspace/connections.json",
+        ".aiworkspace/terminals.json",
+        ".aiworkspace/secrets.json",
         ".claude/mcp.json",
     ];
     let existing = if gitignore_path.exists() {
@@ -300,8 +300,8 @@ pub fn write_mcp_config(project_path: &str) -> anyhow::Result<()> {
     ensure_dir(&claude_dir)?;
     let config = serde_json::json!({
         "mcpServers": {
-            "monocode": {
-                "command": "monocode-mcp",
+            "aiworkspace": {
+                "command": "aiworkspace-mcp",
                 "args": ["--project", project_path]
             }
         }

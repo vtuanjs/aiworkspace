@@ -125,7 +125,7 @@ fn read_missing_project_secrets_returns_default() {
 fn init_project_dir_creates_expected_subdirs() {
     let (_dir, path) = tmp_path();
     init_project_dir(&path).unwrap();
-    let base = std::path::Path::new(&path).join(".monocode");
+    let base = std::path::Path::new(&path).join(".aiworkspace");
     assert!(base.exists());
     assert!(base.join("http").exists());
     assert!(base.join("db").exists());
@@ -138,9 +138,9 @@ fn init_project_dir_writes_gitignore_entries() {
     let gitignore = std::fs::read_to_string(
         std::path::Path::new(&path).join(".gitignore")
     ).unwrap();
-    assert!(gitignore.contains(".monocode/connections.json"));
-    assert!(gitignore.contains(".monocode/terminals.json"));
-    assert!(gitignore.contains(".monocode/secrets.json"));
+    assert!(gitignore.contains(".aiworkspace/connections.json"));
+    assert!(gitignore.contains(".aiworkspace/terminals.json"));
+    assert!(gitignore.contains(".aiworkspace/secrets.json"));
     assert!(gitignore.contains(".claude/mcp.json"));
 }
 
@@ -152,7 +152,7 @@ fn init_project_dir_does_not_duplicate_gitignore_entries() {
     let gitignore = std::fs::read_to_string(
         std::path::Path::new(&path).join(".gitignore")
     ).unwrap();
-    assert_eq!(gitignore.matches(".monocode/connections.json").count(), 1);
+    assert_eq!(gitignore.matches(".aiworkspace/connections.json").count(), 1);
 }
 
 #[test]
@@ -170,5 +170,5 @@ fn write_mcp_config_creates_valid_json() {
         std::path::Path::new(&path).join(".claude/mcp.json")
     ).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(json["mcpServers"]["monocode"]["command"], "monocode-mcp");
+    assert_eq!(json["mcpServers"]["aiworkspace"]["command"], "aiworkspace-mcp");
 }

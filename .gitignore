@@ -3,11 +3,11 @@ dist/
 .env
 target/
 
-# MonoCode user data
-~/.monocode/secrets.json
-**/.monocode/terminals.json
-**/.monocode/connections.json
-**/.monocode/secrets.json
-**/.monocode/http/history.json
-**/.monocode/db/history.json
+# AIWorkspace user data
+~/.aiworkspace/secrets.json
+**/.aiworkspace/terminals.json
+**/.aiworkspace/connections.json
+**/.aiworkspace/secrets.json
+**/.aiworkspace/http/history.json
+**/.aiworkspace/db/history.json
 **/.claude/mcp.json
