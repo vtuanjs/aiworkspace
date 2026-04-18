@@ -2,28 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { useProjectsStore } from "../../store/projects";
-const PROJECT_COLORS = [
+import { useWorkspacesStore } from "../../store/workspaces";
+import SettingsModal from "../SettingsModal";
+const WORKSPACE_COLORS = [
   "#6366f1", "#ec4899", "#f59e0b", "#10b981",
   "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6",
 ];
 
-export default function ProjectList() {
-  const { projects, activeProjectId, listProjects, switchProject, addProject, removeProject } =
-    useProjectsStore();
+export default function WorkspaceList() {
+  const { workspaces, activeWorkspaceId, listWorkspaces, switchWorkspace, addWorkspace, removeWorkspace } =
+    useWorkspacesStore();
 
   const [expanded, setExpanded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [path, setPath] = useState("");
   const [name, setName] = useState("");
-  const [color, setColor] = useState(PROJECT_COLORS[0]);
+  const [color, setColor] = useState(WORKSPACE_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Context menu state
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; projectId: string; projectName: string } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; workspaceId: string; workspaceName: string } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -36,19 +39,19 @@ export default function ProjectList() {
     return () => window.removeEventListener("mousedown", handler);
   }, [ctxMenu]);
 
-  const handleProjectContextMenu = (e: React.MouseEvent, projectId: string, projectName: string) => {
+  const handleWorkspaceContextMenu = (e: React.MouseEvent, workspaceId: string, workspaceName: string) => {
     e.preventDefault();
-    setCtxMenu({ x: e.clientX, y: e.clientY, projectId, projectName });
+    setCtxMenu({ x: e.clientX, y: e.clientY, workspaceId, workspaceName });
   };
 
-  const handleRemoveProject = async (projectId: string, projectName: string) => {
+  const handleRemoveWorkspace = async (workspaceId: string, workspaceName: string) => {
     setCtxMenu(null);
-    if (!window.confirm(`Remove "${projectName}" from AIWorkspace?\n\nThis only removes it from the workspace list — your files are not deleted.`)) return;
-    await removeProject(projectId);
+    if (!window.confirm(`Remove "${workspaceName}" from AIWorkspace?\n\nThis only removes it from the workspace list — your files are not deleted.`)) return;
+    await removeWorkspace(workspaceId);
   };
 
   useEffect(() => {
-    listProjects();
+    listWorkspaces();
   }, []);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function ProjectList() {
   const openModal = () => {
     setPath("");
     setName("");
-    setColor(PROJECT_COLORS[0]);
+    setColor(WORKSPACE_COLORS[0]);
     setError(null);
     setModalOpen(true);
   };
@@ -80,7 +83,7 @@ export default function ProjectList() {
     setError(null);
     setLoading(true);
     try {
-      await addProject(trimmedPath, trimmedName, color);
+      await addWorkspace(trimmedPath, trimmedName, color);
       setModalOpen(false);
     } catch (e) {
       setError(String(e));
@@ -114,26 +117,26 @@ export default function ProjectList() {
           transition: "width 0.15s ease",
         }}
       >
-        {projects.map((p) => (
+        {workspaces.map((w) => (
           <button
-            key={p.id}
-            onClick={() => switchProject(p.id)}
-            onContextMenu={(e) => handleProjectContextMenu(e, p.id, p.name)}
-            title={p.name}
+            key={w.id}
+            onClick={() => switchWorkspace(w.id)}
+            onContextMenu={(e) => handleWorkspaceContextMenu(e, w.id, w.name)}
+            title={w.name}
             style={{
               height: 32,
-              borderRadius: activeProjectId === p.id ? 8 : 10,
+              borderRadius: activeWorkspaceId === w.id ? 8 : 10,
               border: "none",
               cursor: "pointer",
-              background: expanded ? (activeProjectId === p.id ? "#1e1e2e" : "transparent") : p.color,
-              color: expanded ? (activeProjectId === p.id ? "#cdd6f4" : "#a6adc8") : "#fff",
+              background: expanded ? (activeWorkspaceId === w.id ? "#1e1e2e" : "transparent") : w.color,
+              color: expanded ? (activeWorkspaceId === w.id ? "#cdd6f4" : "#a6adc8") : "#fff",
               fontSize: 13,
               fontWeight: 700,
               flexShrink: 0,
-              outline: !expanded && activeProjectId === p.id ? `2px solid ${p.color}` : "none",
+              outline: !expanded && activeWorkspaceId === w.id ? `2px solid ${w.color}` : "none",
               outlineOffset: 2,
               transition: "border-radius 0.12s, background 0.12s",
-              boxShadow: !expanded && activeProjectId === p.id ? `0 0 0 2px #11111b, 0 0 0 4px ${p.color}` : "none",
+              boxShadow: !expanded && activeWorkspaceId === w.id ? `0 0 0 2px #11111b, 0 0 0 4px ${w.color}` : "none",
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -149,7 +152,7 @@ export default function ProjectList() {
               width: 22,
               height: 22,
               borderRadius: 6,
-              background: p.color,
+              background: w.color,
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -158,11 +161,11 @@ export default function ProjectList() {
               fontWeight: 800,
               flexShrink: 0,
             }}>
-              {p.name.charAt(0).toUpperCase()}
+              {w.name.charAt(0).toUpperCase()}
             </span>
             {expanded && (
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", fontSize: 12, fontWeight: activeProjectId === p.id ? 600 : 400 }}>
-                {p.name}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", fontSize: 12, fontWeight: activeWorkspaceId === w.id ? 600 : 400 }}>
+                {w.name}
               </span>
             )}
           </button>
@@ -205,6 +208,36 @@ export default function ProjectList() {
         >
           <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>+</span>
           {expanded && <span style={{ fontSize: 12 }}>Add workspace</span>}
+        </button>
+
+        {/* Settings */}
+        <button
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          style={{
+            height: 32,
+            borderRadius: 10,
+            border: "none",
+            background: "none",
+            color: "#45475a",
+            fontSize: 16,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: expanded ? "flex-start" : "center",
+            gap: 8,
+            padding: expanded ? "0 8px" : "0",
+            width: expanded ? "calc(100% - 8px)" : 32,
+            marginLeft: expanded ? 4 : 0,
+            transition: "color 0.12s",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#45475a"; }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>⚙</span>
+          {expanded && <span style={{ fontSize: 12 }}>Settings</span>}
         </button>
 
         {/* Expand / collapse toggle */}
@@ -328,7 +361,7 @@ export default function ProjectList() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <label style={{ color: "#a6adc8", fontSize: 12 }}>Color</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {PROJECT_COLORS.map((c) => (
+                {WORKSPACE_COLORS.map((c) => (
                   <button
                     key={c}
                     onClick={() => setColor(c)}
@@ -388,6 +421,10 @@ export default function ProjectList() {
         </div>
       )}
 
+      {/* Settings modal */}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+
       {/* Project context menu */}
       {ctxMenu && (
         <div
@@ -407,7 +444,7 @@ export default function ProjectList() {
           }}
         >
           <div
-            onMouseDown={() => { switchProject(ctxMenu.projectId); setCtxMenu(null); }}
+            onMouseDown={() => { switchWorkspace(ctxMenu.workspaceId); setCtxMenu(null); }}
             style={{ padding: "5px 16px", cursor: "pointer", color: "#cdd6f4", userSelect: "none" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#313244")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -416,7 +453,7 @@ export default function ProjectList() {
           </div>
           <div style={{ height: 1, background: "#313244", margin: "3px 0" }} />
           <div
-            onMouseDown={() => handleRemoveProject(ctxMenu.projectId, ctxMenu.projectName)}
+            onMouseDown={() => handleRemoveWorkspace(ctxMenu.workspaceId, ctxMenu.workspaceName)}
             style={{ padding: "5px 16px", cursor: "pointer", color: "#f38ba8", userSelect: "none" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#313244")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
