@@ -58,11 +58,12 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
       }
     }
 
-    // 2. Open the new workspace on the Rust side
-    await invoke("open_project", { id });
-
-    // 3. Set the active workspace ID
+    // 2. Reset panel state + switch active ID atomically — prevents stale state flash
+    workspaceStore.resetForSwitch();
     set({ activeWorkspaceId: id });
+
+    // 3. Open the new workspace on the Rust side
+    await invoke("open_project", { id });
 
     // 4. Load workspace and environment state for the new workspace
     const newWorkspace = workspaces.find((w) => w.id === id);

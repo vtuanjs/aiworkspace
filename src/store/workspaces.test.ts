@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 const mockWorkspaceStore = vi.hoisted(() => ({
   saveToDisk: vi.fn(),
   loadFromDisk: vi.fn(),
+  resetForSwitch: vi.fn(),
 }));
 vi.mock("./workspace", () => ({
   useWorkspaceStore: { getState: () => mockWorkspaceStore },
@@ -28,6 +29,7 @@ describe("useWorkspacesStore", () => {
     mockInvoke.mockReset();
     mockWorkspaceStore.saveToDisk.mockReset();
     mockWorkspaceStore.loadFromDisk.mockReset();
+    mockWorkspaceStore.resetForSwitch.mockReset();
     mockEnvironmentStore.loadEnvironments.mockReset();
     useWorkspacesStore.setState({ workspaces: [], activeWorkspaceId: null });
   });
@@ -93,12 +95,12 @@ describe("useWorkspacesStore", () => {
     beforeEach(() => {
       mockWorkspaceStore.saveToDisk.mockResolvedValue(undefined);
       mockWorkspaceStore.loadFromDisk.mockResolvedValue(undefined);
+      mockWorkspaceStore.resetForSwitch.mockReturnValue(undefined);
       mockEnvironmentStore.loadEnvironments.mockResolvedValue(undefined);
       mockInvoke.mockResolvedValue(undefined);
     });
 
-    it("saves current workspace, opens new workspace, then loads workspace and environments", async () => {
-      useWorkspacesStore.setState({ workspaces: [WORKSPACE_A, WORKSPACE_B], activeWorkspaceId: "a" });
+    it("saves current workspace, opens new workspace, then loads workspace and environments", async () => {      useWorkspacesStore.setState({ workspaces: [WORKSPACE_A, WORKSPACE_B], activeWorkspaceId: "a" });
 
       await useWorkspacesStore.getState().switchWorkspace("b");
 
@@ -116,6 +118,14 @@ describe("useWorkspacesStore", () => {
 
       expect(mockWorkspaceStore.saveToDisk).not.toHaveBeenCalled();
       expect(mockInvoke).toHaveBeenCalledWith("open_project", { id: "a" });
+    });
+
+    it("calls resetForSwitch before setting the new active workspace", async () => {
+      useWorkspacesStore.setState({ workspaces: [WORKSPACE_A, WORKSPACE_B], activeWorkspaceId: "a" });
+
+      await useWorkspacesStore.getState().switchWorkspace("b");
+
+      expect(mockWorkspaceStore.resetForSwitch).toHaveBeenCalled();
     });
 
     it("sets activeWorkspaceId to the switched workspace", async () => {
