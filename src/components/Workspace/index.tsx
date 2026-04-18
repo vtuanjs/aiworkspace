@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useWorkspaceStore } from "../../store/workspace";
+import { useWorkspaceStore, type RightTab } from "../../store/workspace";
 import { useWorkspacesStore } from "../../store/workspaces";
 
 // ── File tree types ───────────────────────────────────────────────────────────
@@ -743,7 +743,7 @@ import EditorPanel from "../panels/EditorPanel";
 import SearchPanel from "../panels/SearchPanel";
 import EnvironmentSwitcher from "../EnvironmentSwitcher";
 
-type RightTabId = "browser" | "http" | "db";
+type RightTabId = RightTab;
 
 const RIGHT_TABS: { id: RightTabId; label: string; icon: string }[] = [
   { id: "browser", label: "Browser",  icon: "⊕" },
@@ -892,8 +892,7 @@ function SidePanel({ width, view }: { width: number; view: SideView }) {
 // ── RightPanel ────────────────────────────────────────────────────────────────
 
 function RightPanel({ width, onResize }: { width: number; onResize: (w: number) => void }) {
-  const [activeTab, setActiveTab] = useState<RightTabId>("browser");
-  const { activeWorkspaceId } = useWorkspacesStore();
+  const { rightTab: activeTab, setRightTab } = useWorkspaceStore();
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -942,7 +941,7 @@ function RightPanel({ width, onResize }: { width: number; onResize: (w: number) 
           {RIGHT_TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setRightTab(tab.id)}
               style={{
                 height: "100%",
                 padding: "0 16px",
@@ -968,11 +967,17 @@ function RightPanel({ width, onResize }: { width: number; onResize: (w: number) 
           ))}
         </div>
 
-        {/* Tab content */}
+        {/* Tab content — always mounted, CSS-toggled to preserve state */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {activeTab === "browser" && <BrowserPanel key={activeWorkspaceId ?? "none"} />}
-          {activeTab === "http"    && <HttpPanel    key={activeWorkspaceId ?? "none"} />}
-          {activeTab === "db"      && <DbPanel      key={activeWorkspaceId ?? "none"} />}
+          <div style={{ display: activeTab === "browser" ? "flex" : "none", flex: 1, overflow: "hidden", flexDirection: "column" }}>
+            <BrowserPanel />
+          </div>
+          <div style={{ display: activeTab === "http" ? "flex" : "none", flex: 1, overflow: "hidden", flexDirection: "column" }}>
+            <HttpPanel />
+          </div>
+          <div style={{ display: activeTab === "db" ? "flex" : "none", flex: 1, overflow: "hidden", flexDirection: "column" }}>
+            <DbPanel />
+          </div>
         </div>
       </div>
     </div>
@@ -982,16 +987,22 @@ function RightPanel({ width, onResize }: { width: number; onResize: (w: number) 
 // ── Workspace ─────────────────────────────────────────────────────────────────
 
 export default function Workspace() {
-  useWorkspaceStore();
+  const {
+    sideOpen,
+    setSideOpen,
+    sideView,
+    setSideView,
+    terminalOpen,
+    setTerminalOpen,
+    terminalHeight,
+    setTerminalHeight,
+    rightOpen,
+    setRightOpen,
+    rightWidth,
+    setRightWidth,
+  } = useWorkspaceStore();
   const { activeWorkspaceId, workspaces } = useWorkspacesStore();
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
-
-  const [sideOpen, setSideOpen] = useState(true);
-  const [sideView, setSideView] = useState<SideView>("explorer");
-  const [terminalOpen, setTerminalOpen] = useState(true);
-  const [terminalHeight, setTerminalHeight] = useState(220);
-  const [rightOpen, setRightOpen] = useState(true);
-  const [rightWidth, setRightWidth] = useState(360);
 
   // Global VS Code–style hotkeys — keybindings come from settings store (user-configurable)
   useEffect(() => {
@@ -1016,7 +1027,7 @@ export default function Workspace() {
 
       // ── Sidebar ────────────────────────────────────────────────────────────
       if (combo === get(HOTKEY_ACTIONS.TOGGLE_SIDEBAR)) {
-        e.preventDefault(); setSideOpen((v) => !v); return;
+        e.preventDefault(); setSideOpen(!useWorkspaceStore.getState().sideOpen); return;
       }
       if (combo === get(HOTKEY_ACTIONS.SHOW_EXPLORER)) {
         e.preventDefault(); setSideView("explorer"); setSideOpen(true); return;
@@ -1027,10 +1038,10 @@ export default function Workspace() {
 
       // ── Terminal / right panel ─────────────────────────────────────────────
       if (combo === get(HOTKEY_ACTIONS.TOGGLE_TERMINAL)) {
-        e.preventDefault(); setTerminalOpen((v) => !v); return;
+        e.preventDefault(); setTerminalOpen(!useWorkspaceStore.getState().terminalOpen); return;
       }
       if (combo === get(HOTKEY_ACTIONS.TOGGLE_RIGHT_PANEL)) {
-        e.preventDefault(); setRightOpen((v) => !v); return;
+        e.preventDefault(); setRightOpen(!useWorkspaceStore.getState().rightOpen); return;
       }
 
       // ── Tab ops (skip when typing in an input) ────────────────────────────
@@ -1102,8 +1113,8 @@ export default function Workspace() {
           if (sideOpen && sideView === view) setSideOpen(false);
           else { setSideView(view); setSideOpen(true); }
         }}
-        onToggleTerminal={() => setTerminalOpen((v) => !v)}
-        onToggleRight={() => setRightOpen((v) => !v)}
+        onToggleTerminal={() => setTerminalOpen(!useWorkspaceStore.getState().terminalOpen)}
+        onToggleRight={() => setRightOpen(!useWorkspaceStore.getState().rightOpen)}
       />
 
       {/* Main area: [SidePanel?] + [EditorArea + BottomPanel] + [RightPanel?] */}
@@ -1120,18 +1131,17 @@ export default function Workspace() {
             <EditorPanel />
           </div>
 
-          {/* Terminal panel — bottom, resizable */}
-          {terminalOpen && (
-            <div
-              style={{
-                height: terminalHeight,
-                flexShrink: 0,
-                borderTop: "1px solid #313244",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
-            >
+          {/* Terminal panel — always mounted, CSS-toggled to preserve state */}
+          <div
+            style={{
+              display: terminalOpen ? "flex" : "none",
+              height: terminalHeight,
+              flexShrink: 0,
+              borderTop: "1px solid #313244",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
               {/* Terminal header */}
               <div
                 style={{
@@ -1175,14 +1185,13 @@ export default function Workspace() {
               <div style={{ flex: 1, overflow: "hidden" }}>
                 <TerminalPanel />
               </div>
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Right panel — Browser / HTTP / Database */}
-        {rightOpen && (
+        {/* Right panel — always mounted, CSS-toggled to preserve state */}
+        <div style={{ display: rightOpen ? "flex" : "none", flexDirection: "row", overflow: "hidden", flexShrink: 0 }}>
           <RightPanel width={rightWidth} onResize={setRightWidth} />
-        )}
+        </div>
       </div>
     </div>
   );
