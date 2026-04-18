@@ -4,7 +4,7 @@
 use std::io::{self, BufRead, Write};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
-const SERVER_NAME: &str = "monocode";
+const SERVER_NAME: &str = "aiworkspace";
 const SERVER_VERSION: &str = "0.1.0";
 
 // JSON-RPC error codes

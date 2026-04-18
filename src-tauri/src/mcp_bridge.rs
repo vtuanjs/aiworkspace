@@ -4,7 +4,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 
-const IPC_SOCKET_PATH: &str = "/tmp/monocode-ipc.sock";
+const IPC_SOCKET_PATH: &str = "/tmp/aiworkspace-ipc.sock";
 
 /// Forward a command to the main Tauri window over the Unix socket.
 /// Serialises `command` to a single JSON line, writes it to the socket,
@@ -19,7 +19,7 @@ pub fn forward_to_frontend(command: serde_json::Value) -> anyhow::Result<serde_j
         Err(_) => {
             return Ok(serde_json::json!({
                 "ok": false,
-                "error": "monocode main window is not connected"
+                "error": "aiworkspace main window is not connected"
             }));
         }
     };

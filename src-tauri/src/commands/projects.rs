@@ -47,7 +47,7 @@ pub fn open_project(id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn add_project(path: String, name: String, color: String) -> Result<ProjectEntry, String> {
-    // Ensure the project .monocode directory structure exists.
+    // Ensure the project .aiworkspace directory structure exists.
     config::init_project_dir(&path).map_err(|e| e.to_string())?;
 
     let entry = ProjectEntry {

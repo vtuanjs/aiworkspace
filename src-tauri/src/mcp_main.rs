@@ -1,4 +1,4 @@
-// Entry point for the `monocode-mcp` binary.
+// Entry point for the `aiworkspace-mcp` binary.
 // Communicates with Claude Code over stdio using the MCP JSON-RPC 2.0 protocol.
 // Does NOT use Tauri — only the shared protocol modules.
 

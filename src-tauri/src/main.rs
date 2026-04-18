@@ -12,6 +12,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(pty)
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::projects::list_projects,
             commands::projects::open_project,
@@ -24,6 +25,11 @@ fn main() {
             commands::fs::read_dir_tree,
             commands::fs::read_file,
             commands::fs::write_file,
+            commands::fs::create_file_entry,
+            commands::fs::create_dir_entry,
+            commands::fs::rename_entry,
+            commands::fs::delete_entry,
+            commands::fs::reveal_in_finder,
             commands::git::git_status,
             commands::git::git_log,
             commands::git::git_stage,
