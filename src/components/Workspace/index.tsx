@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspaceStore } from "../../store/workspace";
-import { useProjectsStore } from "../../store/projects";
+import { useWorkspacesStore } from "../../store/workspaces";
 
 // ── File tree types ───────────────────────────────────────────────────────────
 
@@ -24,11 +24,19 @@ type ContextMenuAction =
   | "open"
   | "copy-path"
   | "copy-relative-path"
+  | "copy-name"
   | "reveal"
+  | "open-in-terminal"
   | "new-file"
+  | "new-file-sibling"
   | "new-folder"
+  | "duplicate"
   | "rename"
   | "delete";
+
+type MenuItem =
+  | { type: "separator" }
+  | { type: "item"; label: string; action: ContextMenuAction; hint?: string; danger?: boolean };
 
 function ContextMenu({
   x,
@@ -40,7 +48,7 @@ function ContextMenu({
   x: number;
   y: number;
   entry: DirEntry;
-  projectRoot: string;
+  workspaceRoot: string;
   onAction: (action: ContextMenuAction, entry: DirEntry) => void;
   onClose: () => void;
 }) {
@@ -54,51 +62,63 @@ function ContextMenu({
     return () => window.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const fileItems: { label: string; action: ContextMenuAction }[] = [
-    { label: "Open", action: "open" },
-    { label: "Copy Path", action: "copy-path" },
-    { label: "Copy Relative Path", action: "copy-relative-path" },
-    { label: "Reveal in Finder", action: "reveal" },
-    { label: "Rename", action: "rename" },
-    { label: "Delete", action: "delete" },
+  const fileItems: MenuItem[] = [
+    { type: "item", label: "Open",              action: "open",              hint: "↵" },
+    { type: "separator" },
+    { type: "item", label: "Copy Path",          action: "copy-path",         hint: "⌘⌥C" },
+    { type: "item", label: "Copy Relative Path", action: "copy-relative-path" },
+    { type: "item", label: "Copy File Name",     action: "copy-name" },
+    { type: "separator" },
+    { type: "item", label: "Reveal in Finder",   action: "reveal",            hint: "⌘⌥R" },
+    { type: "item", label: "Open in Terminal",   action: "open-in-terminal" },
+    { type: "separator" },
+    { type: "item", label: "New File…",          action: "new-file-sibling" },
+    { type: "item", label: "Duplicate",          action: "duplicate" },
+    { type: "separator" },
+    { type: "item", label: "Rename…",            action: "rename",            hint: "F2" },
+    { type: "item", label: "Delete",             action: "delete",            hint: "⌫",  danger: true },
   ];
 
-  const dirItems: { label: string; action: ContextMenuAction; danger?: boolean }[] = [
-    { label: "Copy Path", action: "copy-path" },
-    { label: "Copy Relative Path", action: "copy-relative-path" },
-    { label: "Reveal in Finder", action: "reveal" },
-    { label: "New File", action: "new-file" },
-    { label: "New Folder", action: "new-folder" },
-    { label: "Rename", action: "rename" },
-    { label: "Delete", action: "delete" },
+  const dirItems: MenuItem[] = [
+    { type: "item", label: "Copy Path",          action: "copy-path",         hint: "⌘⌥C" },
+    { type: "item", label: "Copy Relative Path", action: "copy-relative-path" },
+    { type: "item", label: "Copy Folder Name",   action: "copy-name" },
+    { type: "separator" },
+    { type: "item", label: "Reveal in Finder",   action: "reveal",            hint: "⌘⌥R" },
+    { type: "item", label: "Open in Terminal",   action: "open-in-terminal" },
+    { type: "separator" },
+    { type: "item", label: "New File…",          action: "new-file" },
+    { type: "item", label: "New Folder…",        action: "new-folder" },
+    { type: "separator" },
+    { type: "item", label: "Rename…",            action: "rename",            hint: "F2" },
+    { type: "item", label: "Delete",             action: "delete",            hint: "⌫",  danger: true },
   ];
 
   const items = entry.is_dir ? dirItems : fileItems;
-  const separatorAfter = entry.is_dir
-    ? ["reveal", "new-folder", "rename"]
-    : ["reveal", "open", "rename"];
-  const dangerItems = ["delete"];
 
   return (
     <div
       ref={ref}
       style={{
         position: "fixed",
-        top: y,
-        left: x,
+        top: Math.min(y, window.innerHeight - 320),
+        left: Math.min(x, window.innerWidth - 220),
         background: "#1e1e2e",
         border: "1px solid #45475a",
         borderRadius: 6,
         padding: "4px 0",
-        minWidth: 200,
+        minWidth: 220,
         zIndex: 9000,
         boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
         fontSize: 13,
       }}
     >
-      {items.map((item) => (
-        <div key={item.action}>
+      {items.map((item, i) =>
+        item.type === "separator" ? (
+          <div key={i} style={{ height: 1, background: "#313244", margin: "3px 0" }} />
+        ) : (
           <div
+            key={item.action}
             onMouseDown={(e) => {
               e.preventDefault();
               onAction(item.action, entry);
@@ -107,19 +127,21 @@ function ContextMenu({
             style={{
               padding: "5px 16px",
               cursor: "pointer",
-              color: dangerItems.includes(item.action) ? "#f38ba8" : "#cdd6f4",
+              color: item.danger ? "#f38ba8" : "#cdd6f4",
               userSelect: "none",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 24,
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "#313244")}
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            {item.label}
+            <span>{item.label}</span>
+            {item.hint && <span style={{ color: "#6c7086", fontSize: 11 }}>{item.hint}</span>}
           </div>
-          {separatorAfter.includes(item.action) && (
-            <div style={{ height: 1, background: "#313244", margin: "3px 0" }} />
-          )}
-        </div>
-      ))}
+        )
+      )}
     </div>
   );
 }
@@ -181,10 +203,10 @@ type GitFileStatus = "new" | "modified";
 
 function buildGitStatusMap(
   entries: { path: string; status: string }[],
-  projectRoot: string
+  workspaceRoot: string
 ): Map<string, GitFileStatus> {
   const map = new Map<string, GitFileStatus>();
-  const root = projectRoot.replace(/\/$/, "");
+  const root = workspaceRoot.replace(/\/$/, "");
 
   const setPriority = (absPath: string, s: GitFileStatus) => {
     const existing = map.get(absPath);
@@ -321,13 +343,14 @@ function TreeNode({
 // ── ExplorerPanel ─────────────────────────────────────────────────────────────
 
 function ExplorerPanel() {
-  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile } = useWorkspaceStore();
-  const { projects, activeProjectId } = useProjectsStore();
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile, activeTerminalId } = useWorkspaceStore();
+  const { workspaces, activeWorkspaceId } = useWorkspacesStore();
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
   const [tree, setTree] = useState<DirEntry | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [gitStatusMap, setGitStatusMap] = useState<Map<string, GitFileStatus>>(new Map());
+  const [search, setSearch] = useState("");
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{
@@ -351,31 +374,31 @@ function ExplorerPanel() {
   }, [fileOp]);
 
   const refreshTree = useCallback(() => {
-    if (!activeProject) return;
-    invoke<DirEntry>("read_dir_tree", { path: activeProject.path, depth: 4 })
+    if (!activeWorkspace) return;
+    invoke<DirEntry>("read_dir_tree", { path: activeWorkspace.path, depth: 4 })
       .then(setTree)
       .catch((e) => setTreeError(String(e)));
-    invoke<{ path: string; status: string }[]>("git_status", { projectPath: activeProject.path })
-      .then((entries) => setGitStatusMap(buildGitStatusMap(entries, activeProject.path)))
+    invoke<{ path: string; status: string }[]>("git_status", { projectPath: activeWorkspace.path })
+      .then((entries) => setGitStatusMap(buildGitStatusMap(entries, activeWorkspace.path)))
       .catch(() => setGitStatusMap(new Map()));
-  }, [activeProject?.path]);
+  }, [activeWorkspace?.path]);
 
   useEffect(() => {
-    if (!activeProject) { setTree(null); return; }
+    if (!activeWorkspace) { setTree(null); return; }
     setTreeError(null);
     refreshTree();
-  }, [activeProject?.path]);
+  }, [activeWorkspace?.path]);
 
   // Poll git status every 2s so edits/saves are reflected without a full tree reload.
   useEffect(() => {
-    if (!activeProject) return;
+    if (!activeWorkspace) return;
     const id = setInterval(() => {
-      invoke<{ path: string; status: string }[]>("git_status", { projectPath: activeProject.path })
-        .then((entries) => setGitStatusMap(buildGitStatusMap(entries, activeProject.path)))
+      invoke<{ path: string; status: string }[]>("git_status", { projectPath: activeWorkspace.path })
+        .then((entries) => setGitStatusMap(buildGitStatusMap(entries, activeWorkspace.path)))
         .catch(() => {});
     }, 2000);
     return () => clearInterval(id);
-  }, [activeProject?.path]);
+  }, [activeWorkspace?.path]);
 
   // Single click → preview (temporary tab, italic). Double click → pin.
   const previewFileHandler = (filePath: string) => {
@@ -402,35 +425,81 @@ function ExplorerPanel() {
       case "open":
         pinFileHandler(entry.path);
         break;
+
       case "copy-path":
         await navigator.clipboard.writeText(entry.path);
         break;
+
       case "copy-relative-path": {
-        const root = activeProject?.path ?? "";
+        const root = activeWorkspace?.path ?? "";
         const rel = entry.path.startsWith(root)
           ? entry.path.slice(root.length).replace(/^\//, "")
           : entry.path;
         await navigator.clipboard.writeText(rel);
         break;
       }
+
+      case "copy-name":
+        await navigator.clipboard.writeText(entry.name);
+        break;
+
       case "reveal":
         await invoke("reveal_in_finder", { path: entry.path }).catch(() => {});
         break;
+
+      case "open-in-terminal": {
+        const dir = entry.is_dir ? entry.path : entry.path.split("/").slice(0, -1).join("/");
+        if (activeTerminalId) {
+          await invoke("write_terminal", {
+            terminalId: activeTerminalId,
+            data: `cd "${dir}"\n`,
+          }).catch(() => {});
+        }
+        break;
+      }
+
       case "new-file":
         setFileOp({ type: "new-file", entry, value: "", error: null });
         break;
+
+      case "new-file-sibling": {
+        const parentPath = entry.path.split("/").slice(0, -1).join("/");
+        const parentEntry: DirEntry = { name: "", path: parentPath, is_dir: true };
+        setFileOp({ type: "new-file", entry: parentEntry, value: "", error: null });
+        break;
+      }
+
       case "new-folder":
         setFileOp({ type: "new-folder", entry, value: "", error: null });
         break;
+
+      case "duplicate": {
+        if (entry.is_dir) break;
+        try {
+          const content = await invoke<string>("read_file", { path: entry.path });
+          const dot = entry.name.lastIndexOf(".");
+          const baseName = dot > 0 ? entry.name.slice(0, dot) : entry.name;
+          const ext = dot > 0 ? entry.name.slice(dot) : "";
+          const parent = entry.path.split("/").slice(0, -1).join("/");
+          const newPath = `${parent}/${baseName}_copy${ext}`;
+          await invoke("write_file", { path: newPath, content });
+          pinFileHandler(newPath);
+          refreshTree();
+        } catch (err) {
+          alert(String(err));
+        }
+        break;
+      }
+
       case "rename":
         setFileOp({ type: "rename", entry, value: entry.name, error: null });
         break;
+
       case "delete": {
         const label = entry.is_dir ? "folder and all its contents" : "file";
         if (!window.confirm(`Delete ${label} "${entry.name}"?`)) break;
         try {
           await invoke("delete_entry", { path: entry.path });
-          // Close tab if open
           if (openFiles.includes(entry.path)) {
             const newFiles = openFiles.filter((f) => f !== entry.path);
             setOpenFiles(newFiles);
@@ -446,7 +515,7 @@ function ExplorerPanel() {
   };
 
   const handleFileOpConfirm = async () => {
-    if (!fileOp || !activeProject) return;
+    if (!fileOp || !activeWorkspace) return;
     const value = fileOp.value.trim();
     if (!value) {
       setFileOp({ ...fileOp, error: "Name cannot be empty." });
@@ -485,14 +554,81 @@ function ExplorerPanel() {
     "new-folder": "New Folder",
   };
 
+  // Flatten tree for search results
+  const flattenTree = (node: DirEntry): DirEntry[] => {
+    const results: DirEntry[] = [];
+    if (!node.is_dir) results.push(node);
+    node.children?.forEach((child) => results.push(...flattenTree(child)));
+    return results;
+  };
+
+  const searchResults = search.trim() && tree
+    ? flattenTree(tree).filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
+    : null;
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative" }}>
-      {!activeProject ? (
-        <div style={{ padding: "12px 8px", color: "#6c7086", fontSize: 12 }}>No project open</div>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+      {/* Search bar */}
+      <div style={{ padding: "6px 8px", borderBottom: "1px solid #313244", flexShrink: 0 }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search files…"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "#313244",
+            border: "1px solid #45475a",
+            borderRadius: 4,
+            padding: "4px 8px",
+            color: "#cdd6f4",
+            fontSize: 12,
+            outline: "none",
+          }}
+        />
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+      {!activeWorkspace ? (
+        <div style={{ padding: "12px 8px", color: "#6c7086", fontSize: 12 }}>No workspace open</div>
       ) : treeError ? (
         <div style={{ padding: "12px 8px", color: "#f38ba8", fontSize: 12 }}>{treeError}</div>
       ) : !tree ? (
         <div style={{ padding: "12px 8px", color: "#6c7086", fontSize: 12 }}>Loading…</div>
+      ) : searchResults ? (
+        searchResults.length === 0 ? (
+          <div style={{ padding: "12px 8px", color: "#6c7086", fontSize: 12 }}>No files match "{search}"</div>
+        ) : (
+          searchResults.map((entry) => (
+            <div
+              key={entry.path}
+              onClick={() => previewFileHandler(entry.path)}
+              onDoubleClick={() => pinFileHandler(entry.path)}
+              onContextMenu={(e) => { e.preventDefault(); handleContextMenu(e, entry); }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "3px 10px",
+                cursor: "pointer",
+                background: activeFile === entry.path ? "#094771" : "transparent",
+                color: activeFile === entry.path ? "#fff" : "#d4d4d4",
+                fontSize: 12,
+                userSelect: "none",
+              }}
+              onMouseEnter={(e) => { if (activeFile !== entry.path) e.currentTarget.style.background = "#2a2a3d"; }}
+              onMouseLeave={(e) => { if (activeFile !== entry.path) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ flexShrink: 0, display: "flex", alignItems: "center", width: 16 }}>
+                <FileIcon name={entry.name} />
+              </span>
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</span>
+              <span style={{ color: "#45475a", fontSize: 10, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>
+                {entry.path.replace(activeWorkspace?.path ?? "", "").split("/").slice(0, -1).join("/").replace(/^\//, "") || "/"}
+              </span>
+            </div>
+          ))
+        )
       ) : (
         tree.children?.map((entry) => (
           <TreeNode
@@ -507,6 +643,7 @@ function ExplorerPanel() {
           />
         ))
       )}
+      </div>{/* end scroll container */}
 
       {/* Context menu */}
       {ctxMenu && (
@@ -514,7 +651,7 @@ function ExplorerPanel() {
           x={ctxMenu.x}
           y={ctxMenu.y}
           entry={ctxMenu.entry}
-          projectRoot={activeProject?.path ?? ""}
+          workspaceRoot={activeWorkspace?.path ?? ""}
           onAction={handleAction}
           onClose={() => setCtxMenu(null)}
         />
@@ -552,7 +689,7 @@ function ExplorerPanel() {
             </div>
             {fileOp.type !== "rename" && (
               <div style={{ color: "#6c7086", fontSize: 11 }}>
-                In: {fileOp.entry.path.replace(activeProject?.path ?? "", "").replace(/^\//, "") || "/"}
+                In: {fileOp.entry.path.replace(activeWorkspace?.path ?? "", "").replace(/^\//, "") || "/"}
               </div>
             )}
             <input
@@ -597,138 +734,128 @@ function ExplorerPanel() {
     </div>
   );
 }
+import { useSettingsStore, HOTKEY_ACTIONS, eventToCombo } from "../../store/settings";
 import TerminalPanel from "../panels/TerminalPanel";
 import BrowserPanel from "../panels/BrowserPanel";
 import HttpPanel from "../panels/HttpPanel";
 import DbPanel from "../panels/DbPanel";
 import EditorPanel from "../panels/EditorPanel";
+import SearchPanel from "../panels/SearchPanel";
 import EnvironmentSwitcher from "../EnvironmentSwitcher";
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-// Simple SVG-free text icons
+type RightTabId = "browser" | "http" | "db";
 
-type ActivityId = "explorer" | "terminal" | "browser" | "http" | "db";
-
-const ACTIVITIES: { id: ActivityId; label: string; icon: string }[] = [
-  { id: "explorer", label: "Explorer", icon: "◫" },
-  { id: "browser",  label: "Browser",  icon: "⊕" },
-  { id: "http",     label: "HTTP",     icon: "⇄" },
-  { id: "db",       label: "Database", icon: "◎" },
-  { id: "terminal", label: "Terminal", icon: "⌘" },
+const RIGHT_TABS: { id: RightTabId; label: string; icon: string }[] = [
+  { id: "browser", label: "Browser",  icon: "⊕" },
+  { id: "http",    label: "HTTP",     icon: "⇄" },
+  { id: "db",      label: "Database", icon: "◎" },
 ];
 
-// ── ActivityBar ───────────────────────────────────────────────────────────────
+// ── TopBar ────────────────────────────────────────────────────────────────────
 
-function ActivityBar({
+function ToolbarBtn({
+  icon,
+  label,
   active,
-  onSelect,
-  expanded,
-  onExpandToggle,
+  onClick,
 }: {
-  active: ActivityId | null;
-  onSelect: (id: ActivityId) => void;
-  expanded: boolean;
-  onExpandToggle: () => void;
+  icon: string;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      style={{
+        width: 32,
+        height: 28,
+        borderRadius: 5,
+        border: "none",
+        background: active ? "#313244" : "transparent",
+        color: active ? "#cdd6f4" : "#6c7086",
+        fontSize: 16,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "background 0.1s, color 0.1s",
+        flexShrink: 0,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = "#313244";
+        (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = active ? "#313244" : "transparent";
+        (e.currentTarget as HTMLButtonElement).style.color = active ? "#cdd6f4" : "#6c7086";
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
+
+type SideView = "explorer" | "search";
+
+function TopBar({
+  sideOpen,
+  sideView,
+  terminalOpen,
+  rightOpen,
+  workspaceName,
+  onSideViewClick,
+  onToggleTerminal,
+  onToggleRight,
+}: {
+  sideOpen: boolean;
+  sideView: SideView;
+  terminalOpen: boolean;
+  rightOpen: boolean;
+  workspaceName: string;
+  onSideViewClick: (view: SideView) => void;
+  onToggleTerminal: () => void;
+  onToggleRight: () => void;
 }) {
   return (
     <div
       style={{
-        width: expanded ? 160 : 48,
+        height: 38,
         background: "#181825",
-        borderRight: "1px solid #313244",
+        borderBottom: "1px solid #313244",
         display: "flex",
-        flexDirection: "column",
-        alignItems: expanded ? "stretch" : "center",
-        paddingTop: 4,
-        paddingBottom: 4,
-        gap: 2,
+        alignItems: "center",
+        padding: "0 8px",
+        gap: 4,
         flexShrink: 0,
-        overflow: "hidden",
-        transition: "width 0.15s ease",
+        userSelect: "none",
       }}
     >
-      {ACTIVITIES.map((a) => (
-        <button
-          key={a.id}
-          onClick={() => onSelect(a.id)}
-          title={a.label}
-          style={{
-            height: 40,
-            borderRadius: 6,
-            border: "none",
-            background: active === a.id ? "#313244" : "transparent",
-            color: active === a.id ? "#cdd6f4" : "#6c7086",
-            fontSize: 18,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: expanded ? "flex-start" : "center",
-            gap: 10,
-            padding: expanded ? "0 12px" : "0",
-            width: expanded ? "calc(100% - 8px)" : 40,
-            marginLeft: expanded ? 4 : 0,
-            borderLeft: active === a.id ? "2px solid #cba6f7" : "2px solid transparent",
-            transition: "color 0.1s, background 0.1s",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-          }}
-          onMouseEnter={(e) => { if (active !== a.id) (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-          onMouseLeave={(e) => { if (active !== a.id) (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
-        >
-          <span style={{ flexShrink: 0 }}>{a.icon}</span>
-          {expanded && <span style={{ fontSize: 12, fontWeight: active === a.id ? 600 : 400 }}>{a.label}</span>}
-        </button>
-      ))}
+      {/* Left: Explorer + Search toggles */}
+      <ToolbarBtn icon="◫" label="Explorer (⌘⇧E)" active={sideOpen && sideView === "explorer"} onClick={() => onSideViewClick("explorer")} />
+      <ToolbarBtn icon="⌕" label="Search (⌘⇧F)" active={sideOpen && sideView === "search"} onClick={() => onSideViewClick("search")} />
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
+      <div style={{ width: 1, height: 18, background: "#313244", margin: "0 4px" }} />
 
-      {/* Expand / collapse toggle */}
-      <button
-        onClick={onExpandToggle}
-        title={expanded ? "Collapse" : "Expand"}
-        style={{
-          height: 28,
-          borderRadius: 6,
-          border: "none",
-          background: "none",
-          color: "#45475a",
-          fontSize: 14,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: expanded ? "flex-end" : "center",
-          padding: expanded ? "0 12px" : "0",
-          width: expanded ? "calc(100% - 8px)" : 40,
-          marginLeft: expanded ? 4 : 0,
-          transition: "color 0.12s",
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#45475a"; }}
-      >
-        {expanded ? "«" : "»"}
-      </button>
+      {/* Center — active workspace name */}
+      <span style={{ color: "#6c7086", fontSize: 12, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {workspaceName}
+      </span>
+
+      {/* Right: env switcher + panel toggles */}
+      <EnvironmentSwitcher />
+      <div style={{ width: 1, height: 18, background: "#313244", margin: "0 4px" }} />
+      <ToolbarBtn icon="⌘" label="Toggle Terminal (^`)" active={terminalOpen} onClick={onToggleTerminal} />
+      <ToolbarBtn icon="◨" label="Toggle Right Panel (⌘⇧\)" active={rightOpen} onClick={onToggleRight} />
     </div>
   );
 }
 
 // ── SidePanel ─────────────────────────────────────────────────────────────────
 
-function SidePanel({
-  activity,
-  width,
-}: {
-  activity: ActivityId;
-  width: number;
-}) {
-  const TITLES: Record<ActivityId, string> = {
-    explorer: "EXPLORER",
-    browser: "BROWSER",
-    http: "HTTP CLIENT",
-    db: "DATABASE",
-    terminal: "TERMINAL",
-  };
-
+function SidePanel({ width, view }: { width: number; view: SideView }) {
+  const TITLES: Record<SideView, string> = { explorer: "EXPLORER", search: "SEARCH" };
   return (
     <div
       style={{
@@ -753,13 +880,99 @@ function SidePanel({
           userSelect: "none",
         }}
       >
-        {TITLES[activity]}
+        {TITLES[view]}
       </div>
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {activity === "explorer" && <ExplorerPanel />}
-        {activity === "browser"  && <BrowserPanel />}
-        {activity === "http"     && <HttpPanel />}
-        {activity === "db"       && <DbPanel />}
+        {view === "explorer" ? <ExplorerPanel /> : <SearchPanel />}
+      </div>
+    </div>
+  );
+}
+
+// ── RightPanel ────────────────────────────────────────────────────────────────
+
+function RightPanel({ width, onResize }: { width: number; onResize: (w: number) => void }) {
+  const [activeTab, setActiveTab] = useState<RightTabId>("browser");
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    const onMove = (ev: MouseEvent) => {
+      onResize(Math.max(240, Math.min(720, startW + startX - ev.clientX)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  return (
+    <div style={{ width, flexShrink: 0, display: "flex", flexDirection: "row", overflow: "hidden" }}>
+      {/* Drag handle */}
+      <div
+        onMouseDown={startResize}
+        style={{
+          width: 4,
+          flexShrink: 0,
+          background: "#313244",
+          cursor: "col-resize",
+          transition: "background 0.1s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#cba6f7")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "#313244")}
+      />
+
+      {/* Panel body */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#181825", overflow: "hidden" }}>
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            borderBottom: "1px solid #313244",
+            background: "#11111b",
+            flexShrink: 0,
+            height: 35,
+          }}
+        >
+          {RIGHT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                height: "100%",
+                padding: "0 16px",
+                border: "none",
+                borderBottom: activeTab === tab.id ? "2px solid #cba6f7" : "2px solid transparent",
+                background: "transparent",
+                color: activeTab === tab.id ? "#cdd6f4" : "#6c7086",
+                fontSize: 12,
+                fontWeight: activeTab === tab.id ? 600 : 400,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                whiteSpace: "nowrap",
+                transition: "color 0.1s",
+              }}
+              onMouseEnter={(e) => { if (activeTab !== tab.id) (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+              onMouseLeave={(e) => { if (activeTab !== tab.id) (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+            >
+              <span style={{ fontSize: 14 }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {activeTab === "browser" && <BrowserPanel />}
+          {activeTab === "http"    && <HttpPanel />}
+          {activeTab === "db"      && <DbPanel />}
+        </div>
       </div>
     </div>
   );
@@ -769,75 +982,138 @@ function SidePanel({
 
 export default function Workspace() {
   useWorkspaceStore();
-  const { activeProjectId } = useProjectsStore();
+  const { activeWorkspaceId, workspaces } = useWorkspacesStore();
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
-  const [activity, setActivity] = useState<ActivityId>("explorer");
   const [sideOpen, setSideOpen] = useState(true);
-  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [sideView, setSideView] = useState<SideView>("explorer");
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [terminalHeight, setTerminalHeight] = useState(220);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [rightWidth, setRightWidth] = useState(360);
 
-  const handleActivityClick = (id: ActivityId) => {
-    if (id === "terminal") {
-      setTerminalOpen((o) => !o);
-      return;
-    }
-    if (activity === id && sideOpen) {
-      setSideOpen(false);
-    } else {
-      setActivity(id);
-      setSideOpen(true);
-    }
-  };
+  // Global VS Code–style hotkeys — keybindings come from settings store (user-configurable)
+  useEffect(() => {
+    const getAllTabs = () => {
+      const { openFiles, previewFile } = useWorkspaceStore.getState();
+      const hasPreview = previewFile !== null && !openFiles.includes(previewFile);
+      return hasPreview ? [...openFiles, previewFile!] : [...openFiles];
+    };
 
-  if (!activeProjectId) {
+    const cycleTab = (dir: 1 | -1) => {
+      const tabs = getAllTabs();
+      if (tabs.length < 2) return;
+      const { activeFile, setActiveFile } = useWorkspaceStore.getState();
+      const idx = activeFile ? tabs.indexOf(activeFile) : (dir === 1 ? -1 : 0);
+      setActiveFile(tabs[(idx + dir + tabs.length) % tabs.length]);
+    };
+
+    const handler = (e: KeyboardEvent) => {
+      const combo = eventToCombo(e);
+      const hk = useSettingsStore.getState().hotkeys;
+      const get = (action: string) => hk[action];
+
+      // ── Sidebar ────────────────────────────────────────────────────────────
+      if (combo === get(HOTKEY_ACTIONS.TOGGLE_SIDEBAR)) {
+        e.preventDefault(); setSideOpen((v) => !v); return;
+      }
+      if (combo === get(HOTKEY_ACTIONS.SHOW_EXPLORER)) {
+        e.preventDefault(); setSideView("explorer"); setSideOpen(true); return;
+      }
+      if (combo === get(HOTKEY_ACTIONS.SHOW_SEARCH)) {
+        e.preventDefault(); setSideView("search"); setSideOpen(true); return;
+      }
+
+      // ── Terminal / right panel ─────────────────────────────────────────────
+      if (combo === get(HOTKEY_ACTIONS.TOGGLE_TERMINAL)) {
+        e.preventDefault(); setTerminalOpen((v) => !v); return;
+      }
+      if (combo === get(HOTKEY_ACTIONS.TOGGLE_RIGHT_PANEL)) {
+        e.preventDefault(); setRightOpen((v) => !v); return;
+      }
+
+      // ── Tab ops (skip when typing in an input) ────────────────────────────
+      const focused = document.activeElement;
+      const inInput =
+        focused?.tagName === "INPUT" ||
+        focused?.tagName === "TEXTAREA" ||
+        (focused as HTMLElement)?.isContentEditable;
+
+      if (combo === get(HOTKEY_ACTIONS.CLOSE_TAB) && !inInput) {
+        e.preventDefault();
+        const { activeFile, openFiles, previewFile, setOpenFiles, setPreviewFile, setActiveFile } =
+          useWorkspaceStore.getState();
+        if (!activeFile) return;
+        const isPreview = previewFile === activeFile && !openFiles.includes(activeFile);
+        if (isPreview) {
+          setPreviewFile(null);
+          setActiveFile(openFiles[0] ?? null);
+        } else {
+          const next = openFiles.filter((f) => f !== activeFile);
+          setOpenFiles(next);
+          setActiveFile([...next, ...(previewFile && !next.includes(previewFile) ? [previewFile] : [])][0] ?? null);
+        }
+        return;
+      }
+
+      if (combo === get(HOTKEY_ACTIONS.NEXT_TAB))      { e.preventDefault(); cycleTab(1);  return; }
+      if (combo === get(HOTKEY_ACTIONS.PREV_TAB))      { e.preventDefault(); cycleTab(-1); return; }
+      if (combo === get(HOTKEY_ACTIONS.NEXT_EDITOR_TAB)) { e.preventDefault(); cycleTab(1);  return; }
+      if (combo === get(HOTKEY_ACTIONS.PREV_EDITOR_TAB)) { e.preventDefault(); cycleTab(-1); return; }
+
+      // ── Cmd+1..9 — always on, not remappable ─────────────────────────────
+      if (e.metaKey && !e.shiftKey && !e.ctrlKey && e.code.startsWith("Digit")) {
+        const n = parseInt(e.code.slice(5), 10);
+        if (n >= 1 && n <= 9) {
+          const tabs = getAllTabs();
+          if (tabs.length === 0) return;
+          e.preventDefault();
+          useWorkspaceStore.getState().setActiveFile(tabs[Math.min(n - 1, tabs.length - 1)]);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []); // reads store via getState() — always fresh, no stale closures
+
+  if (!activeWorkspaceId) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#1e1e2e", color: "#6c7086", fontSize: 14, userSelect: "none" }}>
-        Select or add a project to begin
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <TopBar sideOpen={false} sideView="explorer" terminalOpen={false} rightOpen={false} workspaceName="" onSideViewClick={() => {}} onToggleTerminal={() => {}} onToggleRight={() => {}} />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#1e1e2e", color: "#6c7086", fontSize: 14, userSelect: "none" }}>
+          Select or add a workspace to begin
+        </div>
       </div>
     );
   }
 
-  const showSidePanel = sideOpen && activity !== "terminal";
-
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden" }}>
-      {/* Activity bar */}
-      <ActivityBar
-        active={terminalOpen && activity === "terminal" ? "terminal" : sideOpen ? activity : null}
-        onSelect={handleActivityClick}
-        expanded={activityExpanded}
-        onExpandToggle={() => setActivityExpanded((v) => !v)}
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Top toolbar */}
+      <TopBar
+        sideOpen={sideOpen}
+        sideView={sideView}
+        terminalOpen={terminalOpen}
+        rightOpen={rightOpen}
+        workspaceName={activeWorkspace?.name ?? ""}
+        onSideViewClick={(view) => {
+          if (sideOpen && sideView === view) setSideOpen(false);
+          else { setSideView(view); setSideOpen(true); }
+        }}
+        onToggleTerminal={() => setTerminalOpen((v) => !v)}
+        onToggleRight={() => setRightOpen((v) => !v)}
       />
 
-      {/* Main area: [SidePanel?] + [EditorArea + BottomPanel] */}
+      {/* Main area: [SidePanel?] + [EditorArea + BottomPanel] + [RightPanel?] */}
       <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden" }}>
         {/* Side panel */}
-        {showSidePanel && (
-          <SidePanel activity={activity} width={260} />
+        {sideOpen && (
+          <SidePanel width={260} view={sideView} />
         )}
 
         {/* Editor + bottom panel column */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Title bar / breadcrumb */}
-          <div
-            style={{
-              height: 35,
-              background: "#181825",
-              borderBottom: "1px solid #313244",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 12px",
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ color: "#6c7086", fontSize: 12 }}>
-              AIWorkspace
-            </span>
-            <EnvironmentSwitcher />
-          </div>
-
           {/* Editor area — always shown */}
           <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
             <EditorPanel />
@@ -901,6 +1177,11 @@ export default function Workspace() {
             </div>
           )}
         </div>
+
+        {/* Right panel — Browser / HTTP / Database */}
+        {rightOpen && (
+          <RightPanel width={rightWidth} onResize={setRightWidth} />
+        )}
       </div>
     </div>
   );
