@@ -6,7 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useWorkspaceStore } from "../../../store/workspace";
-import { useProjectsStore } from "../../../store/projects";
+import { useWorkspacesStore } from "../../../store/workspaces";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalOutputPayload {
@@ -22,13 +22,13 @@ export default function TerminalPanel() {
   const terminalIdRef = useRef<string>(crypto.randomUUID());
 
   const { setActiveTerminalId } = useWorkspaceStore();
-  const { activeProjectId, projects } = useProjectsStore();
+  const { activeWorkspaceId, workspaces } = useWorkspacesStore();
 
   useEffect(() => {
-    if (!containerRef.current || !activeProjectId) return;
+    if (!containerRef.current || !activeWorkspaceId) return;
 
-    const project = projects.find((p) => p.id === activeProjectId);
-    if (!project) return;
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!workspace) return;
 
     const terminalId = terminalIdRef.current;
 
@@ -72,7 +72,7 @@ export default function TerminalPanel() {
     // Create PTY on the Rust side
     invoke("create_terminal", {
       terminalId,
-      projectPath: project.path,
+      projectPath: workspace.path,
     }).catch((err) => {
       term.writeln(`\x1b[31m[AIWorkspace] Failed to create terminal: ${err}\x1b[0m`);
     });
@@ -123,7 +123,7 @@ export default function TerminalPanel() {
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [activeProjectId]);
+  }, [activeWorkspaceId]);
 
   return (
     <div

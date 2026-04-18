@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspaceStore } from "../../../store/workspace";
-import { useProjectsStore } from "../../../store/projects";
+import { useWorkspacesStore } from "../../../store/workspaces";
 // ── Language detection ────────────────────────────────────────────────────────
 
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
@@ -42,24 +42,22 @@ function basename(filePath: string): string {
 
 // ── Monaco types ──────────────────────────────────────────────────────────────
 
-type MonacoEditor = {
-  dispose: () => void;
-  getValue: () => string;
-  updateOptions: (opts: Record<string, unknown>) => void;
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MonacoEditor = any;
 type MonacoModule = typeof import("monaco-editor");
 
 // ── EditorPanel ───────────────────────────────────────────────────────────────
 
 export default function EditorPanel() {
-  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile } = useWorkspaceStore();
-  const { projects, activeProjectId } = useProjectsStore();
+  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile, activeFileLine, searchQuery } = useWorkspaceStore();
+  const { workspaces, activeWorkspaceId } = useWorkspacesStore();
 
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
   const [fileContents, setFileContents] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const decorationIdsRef = useRef<string[]>([]);
 
   // Tab context menu
   const [tabCtxMenu, setTabCtxMenu] = useState<{ x: number; y: number; filePath: string } | null>(null);
@@ -158,6 +156,29 @@ export default function EditorPanel() {
       });
 
       editorRef.current = editor;
+
+      // Apply any pending search highlight that arrived before the editor was ready
+      const { activeFileLine: line, searchQuery: sq } = useWorkspaceStore.getState();
+      if (line) {
+        editor.revealLineInCenter(line);
+        if (sq) {
+          const model = editor.getModel();
+          if (model) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const matches: any[] = model.findMatches(sq, false, false, false, null, false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const decorations: any[] = matches.map((m: any) => ({
+              range: m.range,
+              options: { inlineClassName: "search-result-highlight", overviewRulerColor: "#f9e2af", overviewRulerLane: 1 },
+            }));
+            decorations.push({
+              range: new monaco.Range(line, 1, line, 1),
+              options: { isWholeLine: true, className: "search-result-line", overviewRulerColor: "#cba6f7", overviewRulerLane: 4 },
+            });
+            decorationIdsRef.current = editor.deltaDecorations([], decorations);
+          }
+        }
+      }
     });
 
     return () => { disposed = true; }; // only cancel pending import, never dispose
@@ -165,6 +186,41 @@ export default function EditorPanel() {
   // On save, fileContents changes too, but `if (editorRef.current) return` exits early.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFile, fileContents[activeFile ?? ""]]);
+
+  // Scroll to line + highlight search matches whenever activeFileLine / searchQuery change.
+  // Runs after editor creation since it only fires when editorRef.current exists.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !activeFileLine) return;
+
+    editor.revealLineInCenter(activeFileLine);
+
+    // Clear old decorations
+    decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, []);
+
+    if (!searchQuery || !monacoRef.current) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const monaco = monacoRef.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const matches: any[] = model.findMatches(searchQuery, false, false, false, null, false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decorations: any[] = matches.map((m: any) => ({
+      range: m.range,
+      options: {
+        inlineClassName: "search-result-highlight",
+        overviewRulerColor: "#f9e2af",
+        overviewRulerLane: 1,
+        minimap: { color: "#f9e2af", position: 1 },
+      },
+    }));
+    decorations.push({
+      range: new monaco.Range(activeFileLine, 1, activeFileLine, 1),
+      options: { isWholeLine: true, className: "search-result-line", overviewRulerColor: "#cba6f7", overviewRulerLane: 4 },
+    });
+    decorationIdsRef.current = editor.deltaDecorations([], decorations);
+  }, [activeFileLine, searchQuery]);
 
   const handleTabClick = (filePath: string) => {
     setActiveFile(filePath);
@@ -350,7 +406,7 @@ export default function EditorPanel() {
             {[
               { label: "Copy Path", action: async () => { await navigator.clipboard.writeText(tabCtxMenu.filePath); } },
               { label: "Copy Relative Path", action: async () => {
-                const root = activeProject?.path ?? "";
+                const root = activeWorkspace?.path ?? "";
                 const rel = tabCtxMenu.filePath.startsWith(root)
                   ? tabCtxMenu.filePath.slice(root.length).replace(/^\//, "")
                   : tabCtxMenu.filePath;
@@ -385,7 +441,7 @@ export default function EditorPanel() {
               fontSize: 14,
             }}
           >
-            {activeProject ? "Select a file from the tree to open it" : "Open a file to view or edit it"}
+            {activeWorkspace ? "Select a file from the tree to open it" : "Open a file to view or edit it"}
           </div>
         )}
     </div>

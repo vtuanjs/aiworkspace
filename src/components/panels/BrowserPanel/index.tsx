@@ -33,7 +33,23 @@ export default function BrowserPanel() {
   const [urlInput, setUrlInput] = useState(browserUrl);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleEntry[]>([]);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [consoleHeight, setConsoleHeight] = useState(160);
   const webviewRef = useRef<HTMLElement | null>(null);
+
+  const startConsoleResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = consoleHeight;
+    const onMove = (ev: MouseEvent) => {
+      setConsoleHeight(Math.max(60, Math.min(500, startH + startY - ev.clientY)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   // Keep URL input in sync if browserUrl changes externally (e.g. MCP browser_navigate)
   useEffect(() => {
@@ -140,75 +156,67 @@ export default function BrowserPanel() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100%", background: "#1e1e2e" }}>
-      {/* Main browser area */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#1e1e2e" }}>
+      {/* URL bar */}
       <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{
+          display: "flex",
+          padding: "8px",
+          gap: "8px",
+          borderBottom: "1px solid #313244",
+          background: "#181825",
+          flexShrink: 0,
+        }}
       >
-        {/* URL bar */}
-        <div
+        <input
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="https://localhost:3000"
           style={{
-            display: "flex",
-            padding: "8px",
-            gap: "8px",
-            borderBottom: "1px solid #313244",
-            background: "#181825",
-            flexShrink: 0,
+            flex: 1,
+            background: "#313244",
+            border: "1px solid #45475a",
+            borderRadius: 4,
+            padding: "4px 8px",
+            color: "#cdd6f4",
+            fontSize: 13,
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={handleNavigate}
+          style={{
+            padding: "4px 14px",
+            background: "#6c7086",
+            border: "none",
+            borderRadius: 4,
+            color: "#cdd6f4",
+            cursor: "pointer",
+            fontSize: 13,
           }}
         >
-          <input
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="https://localhost:3000"
-            style={{
-              flex: 1,
-              background: "#313244",
-              border: "1px solid #45475a",
-              borderRadius: 4,
-              padding: "4px 8px",
-              color: "#cdd6f4",
-              fontSize: 13,
-              outline: "none",
-            }}
-          />
-          <button
-            onClick={handleNavigate}
-            style={{
-              padding: "4px 14px",
-              background: "#6c7086",
-              border: "none",
-              borderRadius: 4,
-              color: "#cdd6f4",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            Go
-          </button>
-        </div>
+          Go
+        </button>
+      </div>
 
-        {/* Embedded webview or placeholder */}
+      {/* Webview */}
+      <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         {browserUrl ? (
-          // Tauri 2 uses a custom <webview> tag. TypeScript doesn't know about it,
-          // so we render via createElement string approach.
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {((): React.ReactNode => {
-              const WebviewTag = "webview" as unknown as React.ElementType;
-              return (
-                <WebviewTag
-                  ref={handleWebviewRef}
-                  src={browserUrl}
-                  style={{ width: "100%", height: "100%", border: "none" }}
-                />
-              );
-            })()}
-          </div>
+          ((): React.ReactNode => {
+            const WebviewTag = "webview" as unknown as React.ElementType;
+            return (
+              <WebviewTag
+                ref={handleWebviewRef}
+                src={browserUrl}
+                style={{ width: "100%", height: "100%", border: "none" }}
+              />
+            );
+          })()
         ) : (
           <div
             style={{
-              flex: 1,
+              height: "100%",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -221,32 +229,38 @@ export default function BrowserPanel() {
         )}
       </div>
 
-      {/* Console sidebar */}
+      {/* Console — bottom, resizable */}
       <div
         style={{
-          width: 300,
-          borderLeft: "1px solid #313244",
+          height: consoleHeight,
+          flexShrink: 0,
+          borderTop: "1px solid #313244",
           display: "flex",
           flexDirection: "column",
-          flexShrink: 0,
+          overflow: "hidden",
         }}
       >
+        {/* Drag handle + header */}
         <div
+          onMouseDown={startConsoleResize}
           style={{
+            height: 28,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "6px 10px",
-            borderBottom: "1px solid #313244",
+            padding: "0 10px",
             background: "#181825",
+            borderBottom: "1px solid #313244",
             flexShrink: 0,
+            cursor: "row-resize",
+            userSelect: "none",
           }}
         >
-          <span style={{ color: "#cdd6f4", fontSize: 12, fontWeight: 600 }}>
-            Console
+          <span style={{ color: "#a6adc8", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em" }}>
+            CONSOLE
           </span>
           <button
-            onClick={handleClearConsole}
+            onClick={(e) => { e.stopPropagation(); handleClearConsole(); }}
             title="Clear console"
             style={{
               background: "none",
@@ -256,14 +270,16 @@ export default function BrowserPanel() {
               fontSize: 11,
               padding: "1px 4px",
             }}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             Clear
           </button>
         </div>
 
-        <div style={{ flex: 1, overflow: "auto" }}>
+        {/* Log entries */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
           {consoleLogs.length === 0 ? (
-            <div style={{ padding: "16px", color: "#6c7086", fontSize: 12 }}>
+            <div style={{ padding: "10px 12px", color: "#6c7086", fontSize: 12 }}>
               No console output
             </div>
           ) : (
@@ -271,21 +287,12 @@ export default function BrowserPanel() {
               <div
                 key={entry.id}
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 10px",
                   borderBottom: "1px solid #181825",
-                  background:
-                    entry.level === CONSOLE_LEVEL.ERROR
-                      ? "rgba(243,139,168,0.05)"
-                      : "transparent",
+                  background: entry.level === CONSOLE_LEVEL.ERROR ? "rgba(243,139,168,0.05)" : "transparent",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 6,
-                    alignItems: "flex-start",
-                  }}
-                >
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
                   <span
                     style={{
                       fontSize: 10,
@@ -298,32 +305,21 @@ export default function BrowserPanel() {
                   >
                     {entry.level}
                   </span>
-                  <span
-                    style={{
-                      color: LEVEL_COLOR[entry.level],
-                      fontSize: 12,
-                      wordBreak: "break-word",
-                      flex: 1,
-                    }}
-                  >
+                  <span style={{ color: LEVEL_COLOR[entry.level], fontSize: 12, wordBreak: "break-word", flex: 1 }}>
                     {entry.message}
                   </span>
                 </div>
                 {entry.source && (
-                  <div style={{ color: "#6c7086", fontSize: 10, marginTop: 2 }}>
-                    {entry.source}
-                  </div>
+                  <div style={{ color: "#6c7086", fontSize: 10, marginTop: 1 }}>{entry.source}</div>
                 )}
-                {(entry.level === CONSOLE_LEVEL.ERROR ||
-                  entry.level === CONSOLE_LEVEL.WARN) && (
+                {(entry.level === CONSOLE_LEVEL.ERROR || entry.level === CONSOLE_LEVEL.WARN) && (
                   <button
                     onClick={() => handleSendToClaudeCode(entry)}
                     style={{
-                      marginTop: 4,
+                      marginTop: 3,
                       padding: "2px 8px",
                       fontSize: 11,
-                      background:
-                        sendingId === entry.id ? "#a6e3a1" : "#313244",
+                      background: sendingId === entry.id ? "#a6e3a1" : "#313244",
                       border: "none",
                       borderRadius: 4,
                       color: sendingId === entry.id ? "#1e1e2e" : "#cdd6f4",
