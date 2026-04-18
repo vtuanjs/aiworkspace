@@ -1,8 +1,9 @@
 import { useEffect, Component, ReactNode } from "react";
-import ProjectList from "./components/ProjectList";
+import WorkspaceList from "./components/WorkspaceList";
 import Workspace from "./components/Workspace";
 import StatusBar from "./components/StatusBar";
 import { initMcpBridge } from "./lib/mcpBridge";
+import { useSettingsStore } from "./store/settings";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -21,7 +22,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export default function App() {
+  const loadSettings = useSettingsStore((s) => s.load);
+
   useEffect(() => {
+    loadSettings();
     const cleanup = initMcpBridge();
     return cleanup;
   }, []);
@@ -30,7 +34,7 @@ export default function App() {
     <ErrorBoundary>
       <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#1e1e2e", overflow: "hidden" }}>
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-          <ProjectList />
+          <WorkspaceList />
           <Workspace />
         </div>
         <StatusBar />

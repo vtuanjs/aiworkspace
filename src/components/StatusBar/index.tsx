@@ -1,11 +1,11 @@
-import { useProjectsStore } from "../../store/projects";
+import { useWorkspacesStore } from "../../store/workspaces";
 import { useEnvironmentStore } from "../../store/environment";
 
 export default function StatusBar() {
-  const { projects, activeProjectId } = useProjectsStore();
+  const { workspaces, activeWorkspaceId } = useWorkspacesStore();
   const { activeEnvironment } = useEnvironmentStore();
 
-  const activeProject = projects.find((p) => p.id === activeProjectId);
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
 
   return (
     <div
@@ -24,9 +24,9 @@ export default function StatusBar() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {activeProject && (
+        {activeWorkspace && (
           <span style={{ color: "#cba6f7", fontWeight: 600 }}>
-            ⌂ {activeProject.name}
+            ⌂ {activeWorkspace.name}
           </span>
         )}
         {activeEnvironment && (

@@ -3,16 +3,16 @@
 
 import { useEffect, useState } from "react";
 import { useEnvironmentStore, RuntimeToken } from "../../store/environment";
-import { useProjectsStore } from "../../store/projects";
+import { useWorkspacesStore } from "../../store/workspaces";
 
 export default function EnvironmentSwitcher() {
   const { activeEnvironment, environments, runtimeTokens, switchEnvironment, clearExpiredTokens } =
     useEnvironmentStore();
-  const { activeProjectId, projects } = useProjectsStore();
+  const { activeWorkspaceId, workspaces } = useWorkspacesStore();
   const [open, setOpen] = useState(false);
 
-  const activeProject = activeProjectId
-    ? projects.find((p: { id: string }) => p.id === activeProjectId)
+  const activeWorkspace = activeWorkspaceId
+    ? workspaces.find((w: { id: string }) => w.id === activeWorkspaceId)
     : null;
 
   const envNames = Object.keys(environments);
@@ -24,10 +24,10 @@ export default function EnvironmentSwitcher() {
     return () => clearInterval(timer);
   }, [clearExpiredTokens]);
 
-  if (!activeProject) return null;
+  if (!activeWorkspace) return null;
 
   const handleSwitch = async (name: string) => {
-    await switchEnvironment(activeProject.path, name);
+    await switchEnvironment(activeWorkspace.path, name);
     setOpen(false);
   };
 
