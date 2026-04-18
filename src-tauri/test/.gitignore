@@ -1,0 +1,4 @@
+.aiworkspace/connections.json
+.aiworkspace/terminals.json
+.aiworkspace/secrets.json
+.claude/mcp.json
