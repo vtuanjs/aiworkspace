@@ -1,7 +1,7 @@
 {
-  "project": "MonoCode",
+  "project": "AIWorkspace",
   "version": "1.0",
-  "source": "monocode-architecture.md",
+  "source": "aiworkspace-architecture.md",
   "tasks": [
     {
       "id": 1,
@@ -28,13 +28,13 @@
     },
     {
       "id": 2,
-      "name": "Implement config.rs — .monocode JSON read/write",
+      "name": "Implement config.rs — .aiworkspace JSON read/write",
       "priority": "P0",
       "status": "completed",
-      "description": "Typed read/write functions for every JSON file under ~/.monocode/ and <project>/.monocode/. The only module in the codebase that performs file I/O.",
+      "description": "Typed read/write functions for every JSON file under ~/.aiworkspace/ and <project>/.aiworkspace/. The only module in the codebase that performs file I/O.",
       "input": [
         "Architecture doc §3.4 (storage layout)",
-        "~/.monocode/ and <project>/.monocode/ file schemas"
+        "~/.aiworkspace/ and <project>/.aiworkspace/ file schemas"
       ],
       "output": [
         "src-tauri/src/config.rs with typed read/write functions for projects.json, workspace.json, environments.json, collections.json, secrets.json"
@@ -79,7 +79,7 @@
       "description": "Zustand store for the project list and active project ID. Source of truth for which projects exist.",
       "input": [
         "Architecture doc §3.2",
-        "~/.monocode/projects.json schema [{id, name, path, color, lastOpened}]"
+        "~/.aiworkspace/projects.json schema [{id, name, path, color, lastOpened}]"
       ],
       "output": [
         "src/store/projects.ts with full CRUD actions"
@@ -100,7 +100,7 @@
       "description": "Per-project panel state store, scoped to the active project. Resets and reloads on project switch.",
       "input": [
         "Architecture doc §3.2",
-        "<project>/.monocode/workspace.json schema {activePanel, browserUrl, openFiles}"
+        "<project>/.aiworkspace/workspace.json schema {activePanel, browserUrl, openFiles}"
       ],
       "output": [
         "src/store/workspace.ts scoped to the active project"
@@ -175,7 +175,7 @@
       ],
       "acceptance_criteria": [
         "Primary transport: writes to .claude/inbox/NNNN.md and emits MCP notification when MCP session is active",
-        "Fallback transport: writes formatted string to PTY via write_terminal with '——— MonoCode context ———' marker",
+        "Fallback transport: writes formatted string to PTY via write_terminal with '——— AIWorkspace context ———' marker",
         "UI badge shows which transport was used (MCP or PTY)",
         "After sending, terminal panel scrolls into view",
         "Send button flashes green for 1 second after send",
@@ -202,7 +202,7 @@
         "MCP server starts as Tauri sidecar on app launch",
         "All 20 tools from §8.2 are defined with correct input/output schemas",
         "Tool calls are dispatched to mcp_bridge.rs — mcp_tools.rs contains no business logic",
-        "`monocode-mcp --list-tools` prints all tools in MCP format",
+        "`aiworkspace-mcp --list-tools` prints all tools in MCP format",
         "Server communicates over stdio only (no network port)"
       ],
       "depends_on": [1]
@@ -246,7 +246,7 @@
         "Auto-written .claude/mcp.json in project root on every project open"
       ],
       "acceptance_criteria": [
-        "File is written with correct monocode-mcp command and --project path on project open",
+        "File is written with correct aiworkspace-mcp command and --project path on project open",
         "If .claude/mcp.json already exists, prompt the developer before overwriting (§12 R5)",
         "`.claude/mcp.json` is added to project .gitignore automatically",
         "A global 'never auto-configure MCP' toggle in settings suppresses this behavior"
@@ -294,7 +294,7 @@
         "httpExecutor.ts is the single HTTP execution path — used by both Send button and MCP bridge",
         "Request log shows [You] or [Claude Code] source label per entry (§9.2)",
         "Clicking a log entry loads it into the request editor",
-        "Collections stored in .monocode/http/collections.json (git-tracked)",
+        "Collections stored in .aiworkspace/http/collections.json (git-tracked)",
         "Request log is session-only (not persisted to disk)",
         "Environment variable interpolation ({{base_url}}) resolves correctly at fire time"
       ],
@@ -319,7 +319,7 @@
         "Query log shows [You], [Claude Code], [BLOCKED] source labels (§10.3)",
         "Destructive queries from MCP trigger a developer confirmation dialog — Claude Code waits for response",
         "Developer-initiated queries in the editor are NOT gated",
-        "Connections stored in .monocode/connections.json (gitignored)",
+        "Connections stored in .aiworkspace/connections.json (gitignored)",
         "cache_flush always shows confirmation dialog regardless of pattern"
       ],
       "depends_on": [2, 5, 10, 15]
