@@ -72,6 +72,34 @@ pub fn remove_project(id: String) -> Result<(), String> {
     config::write_projects(&filtered).map_err(|e| e.to_string())
 }
 
+// ── Global workspace + panel state ────────────────────────────────────────────
+
+#[tauri::command]
+pub fn read_workspace_state(workspace_id: String) -> Result<String, String> {
+    config::read_global_workspace_state(&workspace_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn write_workspace_state(workspace_id: String, content: String) -> Result<(), String> {
+    config::write_global_workspace_state(&workspace_id, &content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_panel_state(workspace_id: String, panel: String) -> Result<String, String> {
+    if !config::VALID_PANEL_DIRS.contains(&panel.as_str()) {
+        return Err(format!("unknown panel: {}", panel));
+    }
+    config::read_global_panel_state(&workspace_id, &panel).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn write_panel_state(workspace_id: String, panel: String, content: String) -> Result<(), String> {
+    if !config::VALID_PANEL_DIRS.contains(&panel.as_str()) {
+        return Err(format!("unknown panel: {}", panel));
+    }
+    config::write_global_panel_state(&workspace_id, &panel, &content).map_err(|e| e.to_string())
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Format a Unix timestamp (seconds since epoch) as a naive UTC string

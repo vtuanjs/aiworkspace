@@ -289,6 +289,52 @@ pub fn write_db_collections(project_path: &str, col: &DbCollections) -> anyhow::
     write_json(&dir.join("collections.json"), col)
 }
 
+// ── Global per-workspace state (workspaces/, editor/, db/, http/, explorer/) ──
+
+pub const VALID_PANEL_DIRS: &[&str] = &["db", "http", "explorer", "editor"];
+
+fn global_workspace_state_path(workspace_id: &str) -> anyhow::Result<PathBuf> {
+    Ok(aiworkspace_dir()?.join("workspaces").join(format!("{}.json", workspace_id)))
+}
+
+fn global_panel_state_path(workspace_id: &str, panel: &str) -> anyhow::Result<PathBuf> {
+    Ok(aiworkspace_dir()?.join(panel).join(format!("{}.json", workspace_id)))
+}
+
+pub fn read_global_workspace_state(workspace_id: &str) -> anyhow::Result<String> {
+    let path = global_workspace_state_path(workspace_id)?;
+    if !path.exists() {
+        return Ok("{}".to_string());
+    }
+    Ok(fs::read_to_string(path)?)
+}
+
+pub fn write_global_workspace_state(workspace_id: &str, content: &str) -> anyhow::Result<()> {
+    let path = global_workspace_state_path(workspace_id)?;
+    if let Some(parent) = path.parent() {
+        ensure_dir(parent)?;
+    }
+    fs::write(path, content)?;
+    Ok(())
+}
+
+pub fn read_global_panel_state(workspace_id: &str, panel: &str) -> anyhow::Result<String> {
+    let path = global_panel_state_path(workspace_id, panel)?;
+    if !path.exists() {
+        return Ok("{}".to_string());
+    }
+    Ok(fs::read_to_string(path)?)
+}
+
+pub fn write_global_panel_state(workspace_id: &str, panel: &str, content: &str) -> anyhow::Result<()> {
+    let path = global_panel_state_path(workspace_id, panel)?;
+    if let Some(parent) = path.parent() {
+        ensure_dir(parent)?;
+    }
+    fs::write(path, content)?;
+    Ok(())
+}
+
 // ── Project setup ─────────────────────────────────────────────────────────────
 
 pub fn init_project_dir(project_path: &str) -> anyhow::Result<()> {
