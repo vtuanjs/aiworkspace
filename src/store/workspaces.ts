@@ -52,10 +52,7 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
 
     // 1. Save current workspace to disk before switching
     if (activeWorkspaceId) {
-      const currentWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-      if (currentWorkspace) {
-        await workspaceStore.saveToDisk(currentWorkspace.path);
-      }
+      await workspaceStore.saveToDisk(activeWorkspaceId);
     }
 
     // 2. Reset panel state + switch active ID atomically — prevents stale state flash
@@ -70,7 +67,7 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
     if (newWorkspace) {
       const { useEnvironmentStore } = await import("./environment");
       await Promise.all([
-        useWorkspaceStore.getState().loadFromDisk(newWorkspace.path),
+        useWorkspaceStore.getState().loadFromDisk(id),
         useEnvironmentStore.getState().loadEnvironments(newWorkspace.path),
       ]);
     }
