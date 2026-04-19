@@ -159,6 +159,68 @@ async function handleToolCall(payload: McpToolCallPayload): Promise<McpToolResul
         return { id, result: logs };
       }
 
+      case "browser_get_dom": {
+        const selector = typeof params.selector === "string" ? params.selector : null;
+        const domPromise = new Promise<unknown>((resolve) => {
+          listen<unknown>("mcp:browser_get_dom_result", (evt) => resolve(evt.payload))
+            .then((unlisten) => setTimeout(unlisten, 6000));
+        });
+        await emit("mcp:browser_get_dom", { selector });
+        const domResult = await Promise.race([
+          domPromise,
+          new Promise<unknown>((resolve) => setTimeout(() => resolve({ error: "timeout" }), 5000)),
+        ]);
+        return { id, result: domResult };
+      }
+
+      case "browser_click": {
+        const selector = typeof params.selector === "string" ? params.selector : null;
+        if (!selector) return { id, error: "Missing required param: selector" };
+        const clickPromise = new Promise<unknown>((resolve) => {
+          listen<unknown>("mcp:browser_click_result", (evt) => resolve(evt.payload))
+            .then((unlisten) => setTimeout(unlisten, 6000));
+        });
+        await emit("mcp:browser_click", { selector });
+        const clickResult = await Promise.race([
+          clickPromise,
+          new Promise<unknown>((resolve) => setTimeout(() => resolve({ error: "timeout" }), 5000)),
+        ]);
+        return { id, result: clickResult };
+      }
+
+      case "browser_fill": {
+        const selector = typeof params.selector === "string" ? params.selector : null;
+        const value = typeof params.value === "string" ? params.value : null;
+        if (!selector || value === null) {
+          return { id, error: "Missing required params: selector, value" };
+        }
+        const fillPromise = new Promise<unknown>((resolve) => {
+          listen<unknown>("mcp:browser_fill_result", (evt) => resolve(evt.payload))
+            .then((unlisten) => setTimeout(unlisten, 6000));
+        });
+        await emit("mcp:browser_fill", { selector, value });
+        const fillResult = await Promise.race([
+          fillPromise,
+          new Promise<unknown>((resolve) => setTimeout(() => resolve({ error: "timeout" }), 5000)),
+        ]);
+        return { id, result: fillResult };
+      }
+
+      case "browser_screenshot": {
+        const screenshotPromise = new Promise<unknown>((resolve) => {
+          listen<unknown>("mcp:browser_screenshot_result", (evt) => resolve(evt.payload))
+            .then((unlisten) => setTimeout(unlisten, 11000));
+        });
+        await emit("mcp:browser_screenshot", { selector: params.selector ?? null });
+        const screenshotResult = await Promise.race([
+          screenshotPromise,
+          new Promise<unknown>((resolve) =>
+            setTimeout(() => resolve({ error: "timeout" }), 10000)
+          ),
+        ]);
+        return { id, result: screenshotResult };
+      }
+
       default:
         return { id, error: `Unknown tool: ${tool}` };
     }
