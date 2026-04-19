@@ -10,7 +10,7 @@
       "status": "completed",
       "description": "Scaffold a runnable Tauri 2 + React 18 + Vite project matching the directory layout in architecture §3.2.",
       "input": [
-        "Empty monocode/ directory",
+        "Empty aiworkspaces/ directory",
         "Architecture doc §3.2 (project structure)"
       ],
       "output": [

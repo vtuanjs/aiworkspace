@@ -39,7 +39,7 @@ The React frontend (`src/`) is a thin Zustand → Tauri bridge. Components never
 
 ### The one file that talks to Claude Code
 
-`lib/sendToClaudeCode.ts` is the sole writer to PTY/inbox. It tries MCP first (`write_file` to `.claude/inbox/NNNN.md`) and falls back to `write_terminal` when no MCP session is detected. MCP active state is stored in `localStorage` under `monocode:mcp_active`.
+`lib/sendToClaudeCode.ts` is the sole writer to PTY/inbox. It tries MCP first (`write_file` to `.claude/inbox/NNNN.md`) and falls back to `write_terminal` when no MCP session is detected. MCP active state is stored in `localStorage` under `aiworkspaces:mcp_active`.
 
 ### MCP from the frontend side
 
@@ -53,6 +53,34 @@ The React frontend (`src/`) is a thin Zustand → Tauri bridge. Components never
 4. Global secrets — resolved server-side
 
 `lib/resolveVariables.ts` handles client-side substitution for steps 1–2 only. Secrets never reach the frontend.
+
+### Workspace component structure
+
+`components/Workspace/` is split into focused files — do not collapse them back into `index.tsx`:
+
+```
+components/Workspace/
+  index.tsx               # Layout only (~80 lines): assembles panels, calls hooks
+  TopBar.tsx              # ToolbarBtn + TopBar; exports SideView type
+  SidePanel.tsx           # Titled wrapper; renders ExplorerPanel or SearchPanel
+  RightPanel.tsx          # Drag-resizable right panel (Browser/HTTP/DB)
+  TerminalContainer.tsx   # Drag-resizable terminal wrapper with header
+  hooks/
+    useResizeDrag.ts      # startResizeDrag() — shared by RightPanel and TerminalContainer
+    useWorkspaceHotkeys.ts # Global keyboard shortcuts; mounted once in Workspace
+  explorer/
+    index.tsx             # ExplorerPanel: search, file ops, tree
+    TreeNode.tsx          # Recursive dir/file node
+    ContextMenu.tsx       # Right-click menu; FILE_ITEMS / DIR_ITEMS are module-level constants
+    FileIcon.tsx          # Extension → icon mapping
+    types.ts              # DirEntry, GitFileStatus, ContextMenuAction, MenuItem
+    utils.ts              # buildGitStatusMap(), flattenTree()
+```
+
+Rules:
+- `index.tsx` must stay layout-only. Logic goes into hooks or child components.
+- Drag-resize must use `startResizeDrag` from `hooks/useResizeDrag.ts` — never inline `mousemove`/`mouseup` listeners.
+- `explorer/` sub-components import only from `./types` and siblings — never from `../` panel folders.
 
 ## Key Conventions
 

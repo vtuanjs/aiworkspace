@@ -33,18 +33,18 @@ This crate produces **two separate binaries**:
 
 | Binary | Entry point | Purpose |
 |--------|-------------|---------|
-| `monocode` | `src/main.rs` | Main Tauri desktop app |
-| `monocode-mcp` | `src/mcp_main.rs` | Standalone MCP sidecar; no Tauri — communicates with Claude Code over stdio (JSON-RPC 2.0) |
+| `aiworkspaces` | `src/main.rs` | Main Tauri desktop app |
+| `aiworkspaces-mcp` | `src/mcp_main.rs` | Standalone MCP sidecar; no Tauri — communicates with Claude Code over stdio (JSON-RPC 2.0) |
 
 `lib.rs` re-exports shared modules so both binaries can use them.
 
 ## Module Responsibilities
 
-- **`config.rs`** — All `.monocode` JSON reads/writes. No other module does file I/O.
+- **`config.rs`** — All `.aiworkspaces` JSON reads/writes. No other module does file I/O.
 - **`pty_manager.rs`** — Owns all PTY handles (`SharedPtyManager` is Tauri managed state). Uses `portable-pty` + `tmux`. Closing a session drops the PTY but keeps tmux alive.
 - **`mcp_server.rs`** — JSON-RPC 2.0 loop over stdio. Routes `tools/list` and `tools/call` to `mcp_tools`.
 - **`mcp_tools.rs`** — `McpTool` enum, input schemas, and `dispatch()`. Add new MCP tools here.
-- **`mcp_bridge.rs`** — Forwards commands to the main window over a Unix socket (`/tmp/monocode-ipc.sock`). Enforces the destructive-query gate (`is_destructive_query`). Redacts secrets via `redact_secrets`.
+- **`mcp_bridge.rs`** — Forwards commands to the main window over a Unix socket (`/tmp/aiworkspaces-ipc.sock`). Enforces the destructive-query gate (`is_destructive_query`). Redacts secrets via `redact_secrets`.
 - **`commands/`** — Tauri `#[tauri::command]` functions, one file per domain. All `invoke()` calls from the frontend resolve here.
 
 ## Adding a New MCP Tool
@@ -65,14 +65,14 @@ This crate produces **two separate binaries**:
 
 ## IPC Pattern
 
-The MCP sidecar communicates back to the main Tauri window via a Unix domain socket at `/tmp/monocode-ipc.sock`. If the socket is unavailable (main window not running), `forward_to_frontend` returns `{"ok": false, "error": "..."}` — the sidecar must handle this gracefully.
+The MCP sidecar communicates back to the main Tauri window via a Unix domain socket at `/tmp/aiworkspaces-ipc.sock`. If the socket is unavailable (main window not running), `forward_to_frontend` returns `{"ok": false, "error": "..."}` — the sidecar must handle this gracefully.
 
 ## Config Structs (`config.rs`)
 
 Key types used across modules:
 
-- `ProjectEntry` — project list entry (`~/.monocode/projects.json`)
-- `WorkspaceState` — per-project panel state (`.monocode/workspace.json`)
-- `Environments` — named env var sets (`.monocode/environments.json`)
+- `ProjectEntry` — project list entry (`~/.aiworkspaces/projects.json`)
+- `WorkspaceState` — per-project panel state (`.aiworkspaces/workspace.json`)
+- `Environments` — named env var sets (`.aiworkspaces/environments.json`)
 - `Secrets` — secret key/value store (never sent to Claude Code)
-- `Connections` — DB/cache connection strings (`.monocode/connections.json`)
+- `Connections` — DB/cache connection strings (`.aiworkspaces/connections.json`)
