@@ -1,48 +1,29 @@
-// Monaco file viewer/editor. Read-only by default; edit is opt-in.
-
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useShallow } from "zustand/shallow";
 import { useWorkspaceStore } from "../../../store/workspace";
 import { useWorkspacesStore } from "../../../store/workspaces";
-import EditorWorker from "../../../workers/editor.worker?worker";
-import TsWorker from "../../../workers/ts.worker?worker";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 
 const DEBUG = import.meta.env.VITE_MONACO_DEBUG === "true";
 const dbg = (...args: unknown[]) => { if (DEBUG) console.log("[monaco-debug]", ...args); };
 
-// Test that ?worker imports resolve correctly at module load time
-if (DEBUG) {
-  try {
-    const w = new EditorWorker();
-    dbg("EditorWorker test-spawn OK, terminating immediately");
-    w.terminate();
-  } catch (e) {
-    dbg("EditorWorker test-spawn FAILED:", e);
-  }
-  try {
-    const w = new TsWorker();
-    dbg("TsWorker test-spawn OK, terminating immediately");
-    w.terminate();
-  } catch (e) {
-    dbg("TsWorker test-spawn FAILED:", e);
-  }
-}
-
-// Must be set at module level — before the dynamic import("monaco-editor") runs —
-// so Monaco finds the environment when it initialises its worker registry.
+// Must be set before any dynamic import("monaco-editor") runs.
 (window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment = {
   getWorker(_: unknown, label: string): Worker {
-    dbg("getWorker called — label:", label);
-    if (label === "typescript" || label === "javascript") {
-      dbg("→ spawning TsWorker");
-      return new TsWorker();
-    }
-    dbg("→ spawning EditorWorker");
+    dbg("getWorker — label:", label);
+    if (label === "json") return new JsonWorker();
+    if (label === "css" || label === "scss" || label === "less") return new CssWorker();
+    if (label === "html" || label === "handlebars" || label === "razor") return new HtmlWorker();
+    if (label === "typescript" || label === "javascript") return new TsWorker();
     return new EditorWorker();
   },
 };
-dbg("MonacoEnvironment registered:", !!(window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment);
+
 // ── Language detection ────────────────────────────────────────────────────────
 
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
@@ -197,7 +178,7 @@ export default function EditorPanel() {
         theme: "vs-dark",
         readOnly: false,
         minimap: { enabled: false },
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace",
         wordWrap: "on",
         automaticLayout: true,
@@ -248,7 +229,7 @@ export default function EditorPanel() {
         // Detect frame drops during scroll
         let lastScrollTime = 0;
         let lastScrollTop = 0;
-        editor.onDidScrollChange((e) => {
+        editor.onDidScrollChange((e: { scrollTop: number }) => {
           const now = performance.now();
           const elapsed = now - lastScrollTime;
           const rowDelta = Math.abs(e.scrollTop - lastScrollTop) / (editor.getOption(66 /* lineHeight */));
@@ -561,4 +542,3 @@ export default function EditorPanel() {
     </div>
   );
 }
-
