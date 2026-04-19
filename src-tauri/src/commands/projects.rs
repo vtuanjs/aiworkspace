@@ -69,7 +69,8 @@ pub fn add_project(path: String, name: String, color: String) -> Result<ProjectE
 pub fn remove_project(id: String) -> Result<(), String> {
     let projects = config::read_projects().map_err(|e| e.to_string())?;
     let filtered: Vec<ProjectEntry> = projects.into_iter().filter(|p| p.id != id).collect();
-    config::write_projects(&filtered).map_err(|e| e.to_string())
+    config::write_projects(&filtered).map_err(|e| e.to_string())?;
+    config::delete_global_workspace_dir(&id).map_err(|e| e.to_string())
 }
 
 // ── Global workspace + panel state ────────────────────────────────────────────

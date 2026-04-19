@@ -289,16 +289,20 @@ pub fn write_db_collections(project_path: &str, col: &DbCollections) -> anyhow::
     write_json(&dir.join("collections.json"), col)
 }
 
-// ── Global per-workspace state (workspaces/, editor/, db/, http/, explorer/) ──
+// ── Global per-workspace state (workspaces/<id>/{state,http,db,explorer,editor}.json) ──
 
 pub const VALID_PANEL_DIRS: &[&str] = &["db", "http", "explorer", "editor"];
 
+fn workspace_dir(workspace_id: &str) -> anyhow::Result<PathBuf> {
+    Ok(aiworkspace_dir()?.join("workspaces").join(workspace_id))
+}
+
 fn global_workspace_state_path(workspace_id: &str) -> anyhow::Result<PathBuf> {
-    Ok(aiworkspace_dir()?.join("workspaces").join(format!("{}.json", workspace_id)))
+    Ok(workspace_dir(workspace_id)?.join("state.json"))
 }
 
 fn global_panel_state_path(workspace_id: &str, panel: &str) -> anyhow::Result<PathBuf> {
-    Ok(aiworkspace_dir()?.join(panel).join(format!("{}.json", workspace_id)))
+    Ok(workspace_dir(workspace_id)?.join(format!("{}.json", panel)))
 }
 
 pub fn read_global_workspace_state(workspace_id: &str) -> anyhow::Result<String> {
@@ -332,6 +336,14 @@ pub fn write_global_panel_state(workspace_id: &str, panel: &str, content: &str) 
         ensure_dir(parent)?;
     }
     fs::write(path, content)?;
+    Ok(())
+}
+
+pub fn delete_global_workspace_dir(workspace_id: &str) -> anyhow::Result<()> {
+    let dir = workspace_dir(workspace_id)?;
+    if dir.exists() {
+        fs::remove_dir_all(dir)?;
+    }
     Ok(())
 }
 
