@@ -125,15 +125,18 @@ export default function TerminalPanel() {
     }
     entry.div.style.display = "";
 
-    // Fit terminal to container after it becomes visible
-    requestAnimationFrame(() => {
+    // Fit terminal after fonts are ready so xterm measures correct character width.
+    // A second fit 300ms later catches slow font loads.
+    const fitAndSync = () => {
       entry!.fitAddon.fit();
       invoke("resize_terminal", {
         terminalId: entry!.terminalId,
         cols: entry!.term.cols,
         rows: entry!.term.rows,
       }).catch(() => {});
-    });
+    };
+    document.fonts.ready.then(() => requestAnimationFrame(fitAndSync));
+    const fontFallbackTimer = setTimeout(fitAndSync, 300);
 
     // Register as the active terminal for sendToClaudeCode
     setActiveTerminalId(entry.terminalId);
@@ -154,6 +157,7 @@ export default function TerminalPanel() {
     resizeObserver.observe(container);
 
     return () => {
+      clearTimeout(fontFallbackTimer);
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       // Do NOT close the terminal — it stays alive for when we return
