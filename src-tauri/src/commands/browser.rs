@@ -224,11 +224,26 @@ pub fn browser_go_back(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Open DevTools for the browser webview.
+/// Show eruda in-page devtools inside the browser webview.
 #[tauri::command]
 pub fn browser_open_devtools(app: AppHandle) -> Result<(), String> {
     if let Some(wv) = app.get_webview(BROWSER_LABEL) {
-        wv.open_devtools();
+        wv.eval(r#"(function(){
+  if(window.__eruda_initialized){eruda.show();return;}
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/eruda';
+  s.onload=function(){eruda.init();window.__eruda_initialized=true;eruda.show();};
+  document.head.appendChild(s);
+})();"#).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Evaluate arbitrary JS in the browser webview.
+#[tauri::command]
+pub fn browser_eval(app: AppHandle, script: String) -> Result<(), String> {
+    if let Some(wv) = app.get_webview(BROWSER_LABEL) {
+        wv.eval(&script).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

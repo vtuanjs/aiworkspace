@@ -87,6 +87,7 @@ fn main() {
             commands::browser::browser_close,
             commands::browser::browser_go_back,
             commands::browser::browser_open_devtools,
+            commands::browser::browser_eval,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
