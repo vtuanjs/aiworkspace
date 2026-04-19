@@ -19,7 +19,10 @@ export function SidePanel({ width, view }: { width: number; view: SideView }) {
     >
       <div
         style={{
-          padding: "8px 12px 6px",
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 12px",
           fontSize: 11,
           fontWeight: 700,
           color: "#a6adc8",

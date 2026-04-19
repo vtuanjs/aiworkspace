@@ -385,6 +385,7 @@ export default function EditorPanel() {
       {/* File tabs */}
       <div
         style={{
+          height: 36,
           display: "flex",
           background: "#181825",
           borderBottom: "1px solid #313244",

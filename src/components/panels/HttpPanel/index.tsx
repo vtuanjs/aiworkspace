@@ -141,10 +141,11 @@ export default function HttpPanel() {
       {/* ── HEADER ── */}
       <div
         style={{
+          height: 36,
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "8px",
+          padding: "0 8px",
           background: "#181825",
           borderBottom: "1px solid #313244",
           flexShrink: 0,
