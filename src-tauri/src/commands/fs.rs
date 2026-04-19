@@ -9,6 +9,8 @@ pub struct DirEntry {
     pub path: String,
     pub is_dir: bool,
     pub children: Option<Vec<DirEntry>>,
+    /// true when this dir's children were not fetched because depth was exhausted
+    pub truncated: bool,
 }
 
 #[tauri::command]
@@ -21,6 +23,7 @@ pub fn read_dir_tree(path: String, depth: Option<u8>) -> Result<DirEntry, String
 pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
+
 
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
@@ -203,7 +206,7 @@ fn build_tree(path: &str, depth: u8) -> anyhow::Result<DirEntry> {
 
     let is_dir = p.is_dir();
 
-    let children = if is_dir && depth > 0 {
+    let (children, truncated) = if is_dir && depth > 0 {
         let mut entries: Vec<DirEntry> = fs::read_dir(p)?
             .filter_map(|e| e.ok())
             .filter_map(|e| {
@@ -228,18 +231,19 @@ fn build_tree(path: &str, depth: u8) -> anyhow::Result<DirEntry> {
                 .then_with(|| a.name.cmp(&b.name))
         });
 
-        Some(entries)
+        (Some(entries), false)
     } else if is_dir {
-        // Depth exhausted — signal there may be children without listing them.
-        Some(vec![])
+        // Depth exhausted — children exist but were not fetched.
+        (Some(vec![]), true)
     } else {
-        None
+        (None, false)
     };
 
     Ok(DirEntry {
         name,
         path: path.to_string(),
         is_dir,
+        truncated,
         children,
     })
 }
