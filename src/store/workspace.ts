@@ -133,20 +133,14 @@ function triggerAutoSave() {
 }
 
 function scheduleAutoSave() {
-  const now = Date.now();
-  const remaining = AUTOSAVE_MS - (now - lastSaveTime);
-
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
-
-  if (remaining <= 0) {
-    lastSaveTime = now;
+  const now = Date.now();
+  const delay = Math.max(0, AUTOSAVE_MS - (now - lastSaveTime));
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = null;
+    lastSaveTime = Date.now();
     triggerAutoSave();
-  } else {
-    autoSaveTimer = setTimeout(() => {
-      lastSaveTime = Date.now();
-      triggerAutoSave();
-    }, remaining);
-  }
+  }, delay);
 }
 
 // ── Store ──────────────────────────────────────────────────────────────────────

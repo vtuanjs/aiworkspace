@@ -2,8 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useShallow } from "zustand/shallow";
 import { useWorkspaceStore } from "../../../store/workspace";
 import { useWorkspacesStore } from "../../../store/workspaces";
+import EditorWorker from "../../../workers/editor.worker?worker";
+import TsWorker from "../../../workers/ts.worker?worker";
+
+const DEBUG = import.meta.env.VITE_MONACO_DEBUG === "true";
+const dbg = (...args: unknown[]) => { if (DEBUG) console.log("[monaco-debug]", ...args); };
+
+// Test that ?worker imports resolve correctly at module load time
+if (DEBUG) {
+  try {
+    const w = new EditorWorker();
+    dbg("EditorWorker test-spawn OK, terminating immediately");
+    w.terminate();
+  } catch (e) {
+    dbg("EditorWorker test-spawn FAILED:", e);
+  }
+  try {
+    const w = new TsWorker();
+    dbg("TsWorker test-spawn OK, terminating immediately");
+    w.terminate();
+  } catch (e) {
+    dbg("TsWorker test-spawn FAILED:", e);
+  }
+}
+
+// Must be set at module level — before the dynamic import("monaco-editor") runs —
+// so Monaco finds the environment when it initialises its worker registry.
+(window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment = {
+  getWorker(_: unknown, label: string): Worker {
+    dbg("getWorker called — label:", label);
+    if (label === "typescript" || label === "javascript") {
+      dbg("→ spawning TsWorker");
+      return new TsWorker();
+    }
+    dbg("→ spawning EditorWorker");
+    return new EditorWorker();
+  },
+};
+dbg("MonacoEnvironment registered:", !!(window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment);
 // ── Language detection ────────────────────────────────────────────────────────
 
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
@@ -49,8 +88,21 @@ type MonacoModule = typeof import("monaco-editor");
 // ── EditorPanel ───────────────────────────────────────────────────────────────
 
 export default function EditorPanel() {
-  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile, activeFileLine, searchQuery } = useWorkspaceStore();
-  const { workspaces, activeWorkspaceId } = useWorkspacesStore();
+  const { openFiles, setOpenFiles, activeFile, setActiveFile, previewFile, setPreviewFile, activeFileLine, searchQuery } = useWorkspaceStore(
+    useShallow((s) => ({
+      openFiles: s.openFiles,
+      setOpenFiles: s.setOpenFiles,
+      activeFile: s.activeFile,
+      setActiveFile: s.setActiveFile,
+      previewFile: s.previewFile,
+      setPreviewFile: s.setPreviewFile,
+      activeFileLine: s.activeFileLine,
+      searchQuery: s.searchQuery,
+    }))
+  );
+  const { workspaces, activeWorkspaceId } = useWorkspacesStore(
+    useShallow((s) => ({ workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId }))
+  );
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -134,6 +186,9 @@ export default function EditorPanel() {
     import("monaco-editor").then((monaco) => {
       if (disposed || !containerRef.current || editorRef.current) return;
 
+      dbg("monaco-editor loaded, creating editor for:", activeFile);
+      dbg("MonacoEnvironment at create time:", !!(window as Window & { MonacoEnvironment?: unknown }).MonacoEnvironment);
+
       monacoRef.current = monaco;
 
       const editor = monaco.editor.create(containerRef.current, {
@@ -149,6 +204,10 @@ export default function EditorPanel() {
         scrollBeyondLastLine: false,
         renderLineHighlight: "all",
         cursorBlinking: "smooth",
+        // Prevent WKWebView from blocking scroll while waiting for JS preventDefault()
+        scrollbar: { alwaysConsumeMouseWheel: false },
+        // GPU-composited scroll animation — avoids dropped frames on WKWebView
+        smoothScrolling: true,
       });
 
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -156,6 +215,61 @@ export default function EditorPanel() {
       });
 
       editorRef.current = editor;
+
+      if (DEBUG) {
+        // Log model info and check tokenization mode
+        const model = editor.getModel();
+        if (model) {
+          dbg("model lineCount:", model.getLineCount(), "language:", model.getLanguageId());
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const m = model as any;
+          const tokenMode = m._tokenization?._backgroundTokenizationState ?? m._tokenization?.constructor?.name ?? "unknown";
+          dbg("tokenization mode/state:", tokenMode);
+          dbg("background tokenization enabled:", !!m._tokenization?._backgroundTokenizer);
+        }
+
+        // PerformanceObserver: report longtasks (>50ms) with timestamp
+        // so we can correlate them to scroll events
+        try {
+          const ltObserver = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              dbg(`LONGTASK ${entry.duration.toFixed(0)}ms at t=${entry.startTime.toFixed(0)}ms — attribution:`,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).attribution?.map((a: any) => `${a.containerType}:${a.name || a.containerSrc || "?"}`).join(", ") ?? "none"
+              );
+            }
+          });
+          ltObserver.observe({ entryTypes: ["longtask"] });
+          dbg("PerformanceObserver longtask registered");
+        } catch (e) {
+          dbg("PerformanceObserver not supported:", e);
+        }
+
+        // Detect frame drops during scroll
+        let lastScrollTime = 0;
+        let lastScrollTop = 0;
+        editor.onDidScrollChange((e) => {
+          const now = performance.now();
+          const elapsed = now - lastScrollTime;
+          const rowDelta = Math.abs(e.scrollTop - lastScrollTop) / (editor.getOption(66 /* lineHeight */));
+          if (lastScrollTime > 0 && elapsed > 32) {
+            dbg(`FRAME DROP — ${elapsed.toFixed(1)}ms, ~${rowDelta.toFixed(0)} rows jumped, scrollTop=${e.scrollTop.toFixed(0)}`);
+          }
+          lastScrollTime = now;
+          lastScrollTop = e.scrollTop;
+        });
+
+        // RAF gap monitor — continuous main-thread blocking indicator
+        let lastRaf = performance.now();
+        const rafLoop = () => {
+          const now = performance.now();
+          const gap = now - lastRaf;
+          if (gap > 50) dbg(`MAIN THREAD BLOCKED — RAF gap ${gap.toFixed(1)}ms`);
+          lastRaf = now;
+          if (editorRef.current) requestAnimationFrame(rafLoop);
+        };
+        requestAnimationFrame(rafLoop);
+      }
 
       // Apply any pending search highlight that arrived before the editor was ready
       const { activeFileLine: line, searchQuery: sq } = useWorkspaceStore.getState();

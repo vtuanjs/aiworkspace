@@ -24,19 +24,45 @@ pub fn create_terminal(
     let tid = terminal_id.clone();
     std::thread::spawn(move || {
         use std::io::Read;
-        let mut buf = [0u8; 4096];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) => break, // EOF — PTY closed
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(256);
+
+        // Reader thread: pushes raw bytes into channel without any emit overhead.
+        let mut read_buf = [0u8; 4096];
+        std::thread::spawn(move || loop {
+            match reader.read(&mut read_buf) {
+                Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    if tx.send(read_buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Batcher: accumulates chunks for up to 16 ms then emits a single event.
+        // This caps Tauri event rate at ~60/s regardless of PTY output volume,
+        // preventing WKWebView message-handler bursts that block the JS thread.
+        let mut pending: Vec<u8> = Vec::new();
+        loop {
+            match rx.recv_timeout(Duration::from_millis(16)) {
+                Ok(chunk) => {
+                    pending.extend_from_slice(&chunk);
+                    while let Ok(more) = rx.try_recv() {
+                        pending.extend_from_slice(&more);
+                    }
+                    let data = String::from_utf8_lossy(&pending).to_string();
                     app.emit(
                         "terminal:output",
                         serde_json::json!({ "terminal_id": &tid, "data": data }),
                     )
                     .ok();
+                    pending.clear();
                 }
-                Err(_) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
     });
