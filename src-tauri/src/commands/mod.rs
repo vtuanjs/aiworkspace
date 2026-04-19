@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod environment;
 pub mod fs;
 pub mod git;
