@@ -1,4 +1,4 @@
-# MonoCode
+# AIWorkspaces
 
 A Tauri 2 desktop app that wraps Claude Code in a multi-panel workspace — terminal, browser, HTTP client, and database viewer side by side. Its one job: pipe runtime context (console errors, HTTP responses, query results) directly into Claude Code without copy-paste.
 
@@ -21,8 +21,8 @@ xcode-select --install
 
 ```bash
 # Clone and bootstrap
-git clone <repo-url> monocode
-cd monocode
+git clone <repo-url> aiworkspaces
+cd aiworkspaces
 bash scripts/setup.sh
 ```
 
@@ -77,7 +77,7 @@ cargo check                       # fast compile check, no output artifacts
 2. Add a project — click **+** in the left sidebar and point it at any local folder.
 3. The terminal panel opens automatically. Start Claude Code there: `claude`.
 4. Open the browser, HTTP, or database panels and load your app.
-5. When something goes wrong (console error, bad HTTP response), click **Send to Claude Code** — MonoCode formats the context and writes it directly into the Claude Code session.
+5. When something goes wrong (console error, bad HTTP response), click **Send to Claude Code** — AIWorkspaces formats the context and writes it directly into the Claude Code session.
 
 ## Project Layout
 
@@ -85,17 +85,17 @@ cargo check                       # fast compile check, no output artifacts
 src/                   React frontend
 src-tauri/src/         Rust backend (two binaries — see below)
 scripts/setup.sh       One-shot bootstrap
-monocode-architecture.md  Full design document
+aiworkspaces-architecture.md  Full design document
 ```
 
 The Rust crate produces two binaries:
 
-- **`monocode`** — the Tauri desktop app
-- **`monocode-mcp`** — a standalone MCP sidecar that Claude Code connects to over stdio; gives Claude Code direct control of the browser, HTTP, and database panels
+- **`aiworkspaces`** — the Tauri desktop app
+- **`aiworkspaces-mcp`** — a standalone MCP sidecar that Claude Code connects to over stdio; gives Claude Code direct control of the browser, HTTP, and database panels
 
 ## Key Constraints
 
 - No Anthropic API calls — Claude Code is the only AI in the loop.
-- All data is stored as plain JSON files on disk (`~/.monocode/` and `<project>/.monocode/`).
+- All data is stored as plain JSON files on disk (`~/.aiworkspaces/` and `<project>/.aiworkspaces/`).
 - Secrets are never sent to Claude Code — the MCP bridge redacts them.
 - tmux keeps terminal sessions alive when you switch between projects.

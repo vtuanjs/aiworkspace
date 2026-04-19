@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What MonoCode Is
+## What AIWorkspaces Is
 
-A Tauri 2 desktop app that wraps Claude Code in a multi-panel workspace. Its sole purpose: close the feedback loop between runtime output (browser errors, HTTP responses, database results) and Claude Code — without copy-paste. Claude Code runs inside the terminal panel; MonoCode feeds it context.
+A Tauri 2 desktop app that wraps Claude Code in a multi-panel workspace. Its sole purpose: close the feedback loop between runtime output (browser errors, HTTP responses, database results) and Claude Code — without copy-paste. Claude Code runs inside the terminal panel; AIWorkspaces feeds it context.
 
 **Not a replacement for Claude Code. Not a general IDE. No Anthropic API calls.**
 
@@ -29,7 +29,7 @@ cargo test mcp_bridge::tests   # single module
 
 ## Architecture Source of Truth
 
-`monocode-architecture.md` is the design source of truth. Before implementing any feature, read the relevant section. Key question to ask: *does this implementation match the architecture described here?*
+`aiworkspaces-architecture.md` is the design source of truth. Before implementing any feature, read the relevant section. Key question to ask: *does this implementation match the architecture described here?*
 
 ## Tech Stack
 
@@ -49,7 +49,7 @@ cargo test mcp_bridge::tests   # single module
 ```
 src-tauri/src/
   main.rs              # Entry point + command registration only
-  config.rs            # All .monocode JSON reads/writes
+  config.rs            # All .aiworkspaces JSON reads/writes
   pty_manager.rs       # Terminal process lifecycle
   mcp_server.rs        # MCP protocol over stdio
   mcp_tools.rs         # MCP tool definitions and dispatch
@@ -85,7 +85,7 @@ src/
 scripts/setup.sh       # Bootstrap: install Rust, deps, env
 ```
 
-The Rust crate produces **two binaries**: `monocode` (Tauri app, `src/main.rs`) and `monocode-mcp` (standalone MCP sidecar over stdio, `src/mcp_main.rs`). Shared modules are re-exported via `lib.rs`.
+The Rust crate produces **two binaries**: `aiworkspaces` (Tauri app, `src/main.rs`) and `aiworkspaces-mcp` (standalone MCP sidecar over stdio, `src/mcp_main.rs`). Shared modules are re-exported via `lib.rs`.
 
 ## Data Flow (One Direction Only)
 
@@ -105,11 +105,11 @@ User action → React component → Zustand store → Tauri invoke → Rust → 
 ## Storage Layout
 
 ```
-~/.monocode/
+~/.aiworkspaces/
   projects.json              # [{id, name, path, color, lastOpened}]
   secrets.json               # Global secrets — gitignored
 
-<each-project>/.monocode/
+<each-project>/.aiworkspaces/
   workspace.json             # activePanel, browserUrl, openFiles
   environments.json          # Named env var sets — git-tracked
   terminals.json             # tmux session names — gitignored
@@ -125,7 +125,7 @@ User action → React component → Zustand store → Tauri invoke → Rust → 
 
 ## Send to Claude Code
 
-Primary transport is MCP `context_push` (writes to `.claude/inbox/NNNN.md`, emits MCP notification). PTY write is the fallback when no MCP session is detected — prepended with `——— MonoCode context ———` marker.
+Primary transport is MCP `context_push` (writes to `.claude/inbox/NNNN.md`, emits MCP notification). PTY write is the fallback when no MCP session is detected — prepended with `——— AIWorkspaces context ———` marker.
 
 ```typescript
 // lib/sendToClaudeCode.ts — core pattern
@@ -137,7 +137,7 @@ export async function sendToClaudeCode(context: WorkspaceContext) {
 
 ## MCP Integration
 
-MonoCode starts a local MCP sidecar on launch and writes `.claude/mcp.json` automatically when a project is opened. Claude Code then drives browser, HTTP, and database panels autonomously.
+AIWorkspaces starts a local MCP sidecar on launch and writes `.claude/mcp.json` automatically when a project is opened. Claude Code then drives browser, HTTP, and database panels autonomously.
 
 Key MCP tools: `http_request`, `browser_navigate`, `browser_get_console_logs`, `browser_screenshot`, `db_query`, `db_describe_table`, `cache_get/set/flush`, `env_get_variables`, `env_switch`.
 
@@ -151,9 +151,9 @@ Key MCP tools: `http_request`, `browser_navigate`, `browser_get_console_logs`, `
 
 ```
 1. Runtime tokens (captured this session — highest priority)
-2. Active environment plain values (.monocode/environments.json)
-3. Project secrets (.monocode/secrets.json)
-4. Global secrets (~/.monocode/secrets.json)
+2. Active environment plain values (.aiworkspaces/environments.json)
+3. Project secrets (.aiworkspaces/secrets.json)
+4. Global secrets (~/.aiworkspaces/secrets.json)
 ```
 
 Claude Code never receives secret values — MCP bridge redacts them as `{{SECRET_NAME}}`.

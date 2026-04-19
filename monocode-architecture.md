@@ -8,7 +8,7 @@ Version 1.0 · April 2026
 
 # 1. Purpose & Problem Statement
 
-MonoCode is a self-hosted, open-source desktop application that wraps Claude Code in a productive multi-panel environment. It is not an AI coding assistant — Claude Code already does that job. It is the shell that makes Claude Code faster by closing the feedback loop between code edits and runtime output.
+AIWorkspaces is a self-hosted, open-source desktop application that wraps Claude Code in a productive multi-panel environment. It is not an AI coding assistant — Claude Code already does that job. It is the shell that makes Claude Code faster by closing the feedback loop between code edits and runtime output.
 
 > **Problem:**  Claude Code edits your code, it works blind on the runtime side. It cannot see browser console errors, HTTP response failures, or live UI rendering. The developer must manually copy-paste errors between Chrome DevTools, the terminal, and Claude Code — an interruption that happens 20–40 times per day.
 
@@ -82,7 +82,7 @@ A Postman-equivalent HTTP client with four surfaces: a request editor, a collect
 
 A unified panel for querying relational databases (PostgreSQL, MySQL), document stores (MongoDB), and cache layers (Redis, Valkey). Queries support environment variables ({{db_host}}, {{db_name}}) resolved from the active environment. Like the HTTP client, it has a query editor, collections, persistent history, and a query log — all sharing the same environment and secret resolution system.
 
-> **Safety gate:** Claude Code is never allowed to execute destructive queries (DROP, DELETE without WHERE, TRUNCATE, UPDATE without WHERE) autonomously. MonoCode detects these patterns and surfaces a confirmation dialog to the developer before executing. This rule is enforced in the MCP bridge layer — Claude Code cannot bypass it.
+> **Safety gate:** Claude Code is never allowed to execute destructive queries (DROP, DELETE without WHERE, TRUNCATE, UPDATE without WHERE) autonomously. AIWorkspaces detects these patterns and surfaces a confirmation dialog to the developer before executing. This rule is enforced in the MCP bridge layer — Claude Code cannot bypass it.
 
 ## 2.7 Editor Panel (Monaco)
 
@@ -107,11 +107,11 @@ A Monaco-based code editor for quick file viewing and editing alongside the term
 The structure follows one rule: one concern, one place. Any developer opening the repo should understand the layout in under two minutes.
 
 ```
-monocode/
+aiworkspaces/
 ├── src-tauri/                   # Rust — OS, PTY, filesystem only
 │   └── src/
 │       ├── main.rs              # Entry point, command registration only
-│       ├── config.rs            # Read/write .monocode JSON files
+│       ├── config.rs            # Read/write .aiworkspaces JSON files
 │       ├── pty_manager.rs       # Terminal process lifecycle
 │       └── commands/
 │           ├── projects.rs      # Open, list, switch projects
@@ -154,18 +154,18 @@ Tauri invoke (commands/)
     ↓
 Rust (config.rs / pty_manager.rs)
     ↓
-Filesystem (.monocode/*.json) or PTY process
+Filesystem (.aiworkspaces/*.json) or PTY process
 ```
 ## 3.4 Storage — No Database
 
 The application uses plain JSON files, identical to how VS Code stores its state. There is no SQLite, no embedded database, no migration system to maintain.
 
 ```
-~/.monocode/
+~/.aiworkspaces/
 ├── projects.json              # [{id, name, path, color, lastOpened}]
 └── secrets.json               # global personal secrets (gitignored)
 
-<each-project>/.monocode/
+<each-project>/.aiworkspaces/
 ├── workspace.json             # activePanel, browserUrl, openFiles
 ├── terminals.json             # tmux session names          [gitignored]
 ├── connections.json           # DB connection strings        [gitignored]
@@ -179,7 +179,7 @@ The application uses plain JSON files, identical to how VS Code stores its state
     └── history.json           # all queries ever fired       [gitignored]
 ```
 
-> **Sharing model:** environments.json and collections.json are git-tracked — commit them and teammates get the full request/query library and environment structure automatically. secrets.json is always gitignored — each developer supplies their own values locally. This is the .env + .env.example pattern built into MonoCode.
+> **Sharing model:** environments.json and collections.json are git-tracked — commit them and teammates get the full request/query library and environment structure automatically. secrets.json is always gitignored — each developer supplies their own values locally. This is the .env + .env.example pattern built into AIWorkspaces.
 
 > **Why no database?** None of this data is relational. There are no joins, no complex queries, no transactions. JSON files are diffable, portable, human-readable, and require zero infrastructure. VS Code uses the same approach.
 
@@ -241,8 +241,8 @@ When the user clicks a project in the sidebar, the application saves the current
 
 ```
 switchProject(newProjectId):
-  1. Save current workspace state → <current>/.monocode/workspace.json
-  2. Load new workspace state    ← <new>/.monocode/workspace.json
+  1. Save current workspace state → <current>/.aiworkspaces/workspace.json
+  2. Load new workspace state    ← <new>/.aiworkspaces/workspace.json
   3. Update Zustand store        → triggers React re-render
   4. Panels read from store      → each panel restores its last state
   (Terminal PTY stays alive in tmux — not killed, just hidden)
@@ -264,9 +264,9 @@ switchProject(newProjectId):
 
 - Tauri opens native folder picker dialog
 
-- Selected folder path added to ~/.monocode/projects.json
+- Selected folder path added to ~/.aiworkspaces/projects.json
 
-- .monocode/ directory created inside the project folder
+- .aiworkspaces/ directory created inside the project folder
 
 - .gitignore updated automatically to exclude connections.json and terminals.json
 
@@ -314,26 +314,26 @@ This document is the source of truth. When using an AI coding assistant to imple
 
 - Does this help close the feedback loop between runtime output and Claude Code? If no, defer it.
 
-- Where does the data live? Does it go in ~/.monocode or <project>/.monocode?
+- Where does the data live? Does it go in ~/.aiworkspaces or <project>/.aiworkspaces?
 
 - Which store slice owns this state? projects.ts or workspace.ts?
 
 > **Reminder:** The goal is a lean, maintainable shell. Every feature added is a feature that must be maintained forever. When in doubt, do not add it.
 
-# 8. MCP Integration — Claude Code Controls MonoCode
+# 8. MCP Integration — Claude Code Controls AIWorkspaces
 
-MCP (Model Context Protocol) is an open standard that lets Claude Code call custom tools. MonoCode ships a local MCP server that exposes the browser and HTTP client as tools Claude Code can drive autonomously. This is MonoCode's strongest differentiator.
+MCP (Model Context Protocol) is an open standard that lets Claude Code call custom tools. AIWorkspaces ships a local MCP server that exposes the browser and HTTP client as tools Claude Code can drive autonomously. This is AIWorkspaces's strongest differentiator.
 
 > **Shift in mental model:** Without MCP: developer sees an error, clicks Send to Claude Code, Claude Code fixes it. With MCP: Claude Code navigates the browser itself, reads console errors itself, fires HTTP requests itself — and fixes issues without waiting for the developer to feed it context.
 
 ## 8.1 Architecture
 
-MonoCode starts a local MCP server as a Tauri sidecar process on launch. Claude Code connects to it via a .claude/mcp.json config file that MonoCode writes automatically when a project is opened. All communication is over stdio — no network port, no authentication needed.
+AIWorkspaces starts a local MCP server as a Tauri sidecar process on launch. Claude Code connects to it via a .claude/mcp.json config file that AIWorkspaces writes automatically when a project is opened. All communication is over stdio — no network port, no authentication needed.
 
 ```
 Claude Code (terminal)
     ↓  calls MCP tool
-MonoCode MCP Server  (sidecar process, stdio)
+AIWorkspaces MCP Server  (sidecar process, stdio)
     ↓  sends command via Tauri IPC
 Tauri backend (Rust)
     ↓  controls panel state
@@ -343,7 +343,7 @@ MCP Server  →  Claude Code
 ```
 ## 8.2 MCP Tools
 
-These are the tools MonoCode exposes to Claude Code. Each tool maps directly to a panel action the developer would otherwise do manually.
+These are the tools AIWorkspaces exposes to Claude Code. Each tool maps directly to a panel action the developer would otherwise do manually.
 
 | **Tool** | **Parameters** | **Returns** | **Panel** |
 | --- | --- | --- | --- |
@@ -371,14 +371,14 @@ These are the tools MonoCode exposes to Claude Code. Each tool maps directly to 
 
 ## 8.3 Project Auto-Configuration
 
-When a project is opened in MonoCode, the application automatically writes a .claude/mcp.json file into the project root. This means Claude Code connects to MonoCode with zero manual setup from the developer.
+When a project is opened in AIWorkspaces, the application automatically writes a .claude/mcp.json file into the project root. This means Claude Code connects to AIWorkspaces with zero manual setup from the developer.
 
 ```json
 // Written to <project>/.claude/mcp.json automatically on project open
 {
   "mcpServers": {
-    "monocode": {
-      "command": "monocode-mcp",
+    "aiworkspaces": {
+      "command": "aiworkspaces-mcp",
       "args": ["--project", "/path/to/project", "--port", "auto"]
     }
   }
@@ -419,7 +419,7 @@ Claude Code:
 ```
 ## 8.5 Implementation
 
-The MCP server is a separate Rust binary that ships alongside the main MonoCode app. It communicates with the main Tauri process via a local Unix socket (or named pipe on Windows).
+The MCP server is a separate Rust binary that ships alongside the main AIWorkspaces app. It communicates with the main Tauri process via a local Unix socket (or named pipe on Windows).
 
 ```
 src-tauri/
@@ -446,9 +446,9 @@ Both mechanisms coexist. They serve different situations.
 
 Unified routing model. Both mechanisms share a single transport underneath: an MCP tool called context_push. Send to Claude Code and autonomous MCP calls differ only in who initiates them (developer vs. Claude Code) and what payload is sent. The PTY-write path described in §4.2 becomes a fallback used only when Claude Code is not connected to the MCP server — not the default. This removes the stdin-injection fragility (interleaved output, paste-mode corruption, no ack) from the happy path.
 
-Primary transport: MCP context_push. MonoCode writes the formatted context into a project-scoped inbox (.claude/inbox/NNNN.md) and emits an MCP notification. Claude Code reads the inbox on notification or at next turn. This gives acknowledgement, retry, idempotency, and survives Claude Code being mid-response.
+Primary transport: MCP context_push. AIWorkspaces writes the formatted context into a project-scoped inbox (.claude/inbox/NNNN.md) and emits an MCP notification. Claude Code reads the inbox on notification or at next turn. This gives acknowledgement, retry, idempotency, and survives Claude Code being mid-response.
 
-Fallback transport: PTY write. Used only when no MCP session is detected on the active terminal. Prepended with a visible marker (——— MonoCode context ———) so interleaving with model output is at least legible. The UI surfaces which transport was used on each send (small badge: MCP or PTY).
+Fallback transport: PTY write. Used only when no MCP session is detected on the active terminal. Prepended with a visible marker (——— AIWorkspaces context ———) so interleaving with model output is at least legible. The UI surfaces which transport was used on each send (small badge: MCP or PTY).
 
 | **Situation** | **Mechanism** | **Why** |
 | --- | --- | --- |
@@ -465,7 +465,7 @@ Fallback transport: PTY write. Used only when no MCP session is detected on the 
 | **Request Editor** Method selector (GET, POST, PUT, PATCH, DELETE) URL input with history autocomplete Headers editor (key/value rows, enable/disable toggle) Body editor with type selector: none, JSON, form, raw Send button — fires request, adds to log Save button — adds to collection
 
 **Collection Sidebar**
-Tree of saved requests grouped by collection name Per-project — stored in .monocode/http/collections.json Claude Code can read collections via http_get_collections MCP tool Claude Code can save useful requests via http_save_to_collection Click to load into request editor
+Tree of saved requests grouped by collection name Per-project — stored in .aiworkspaces/http/collections.json Claude Code can read collections via http_get_collections MCP tool Claude Code can save useful requests via http_save_to_collection Click to load into request editor
 
 ## 9.2 Request Log — The Key Feature
 
@@ -522,9 +522,9 @@ Result returned → mcp_bridge.rs → MCP server → Claude Code
 | **Data** | **Persists?** | **Where** |
 | --- | --- | --- |
 | Request log | Session only — cleared on app restart | Zustand store (memory) |
-| Collections | Permanent | .monocode/http/collections.json |
+| Collections | Permanent | .aiworkspaces/http/collections.json |
 | Last request in editor | Per session | Zustand store (memory) |
-| Active collection | Per project | .monocode/workspace.json |
+| Active collection | Per project | .aiworkspaces/workspace.json |
 
 The request log is intentionally not persisted to disk. It is a live debugging surface, not a history archive. Collections are the persistence mechanism — if Claude Code or the developer finds a request worth keeping, they save it to a collection explicitly.
 
@@ -538,7 +538,7 @@ The request log is intentionally not persisted to disk. It is a live debugging s
 | Document | MongoDB | MQL / aggregation pipeline |
 | Cache / KV | Redis, Valkey, KeyDB | Redis protocol (RESP) |
 
-Connection strings are stored in <project>/.monocode/connections.json which is gitignored automatically. Credentials never touch the architecture document, the query log export, or any shareable surface.
+Connection strings are stored in <project>/.aiworkspaces/connections.json which is gitignored automatically. Credentials never touch the architecture document, the query log export, or any shareable surface.
 
 ## 10.2 Four surfaces
 
@@ -621,14 +621,14 @@ Inspect cache state during debugging Manually flush a stale key Browse keys to u
 | **Data** | **Persists?** | **Where** |
 | --- | --- | --- |
 | Query log | Session only — cleared on restart | Zustand store (memory) |
-| Connection strings | Permanent | .monocode/connections.json (gitignored) |
+| Connection strings | Permanent | .aiworkspaces/connections.json (gitignored) |
 | Last query in editor | Per session | Zustand store (memory) |
-| Schema browser expand state | Per project | .monocode/workspace.json |
-| Active connection | Per project | .monocode/workspace.json |
+| Schema browser expand state | Per project | .aiworkspaces/workspace.json |
+| Active connection | Per project | .aiworkspaces/workspace.json |
 
 # 11. Environments & Token Reuse
 
-Environments are named sets of variables that change per context — local, staging, production. Every request, query, and connection string in MonoCode supports variable interpolation. Switching the active environment instantly re-resolves all variables everywhere without editing individual requests.
+Environments are named sets of variables that change per context — local, staging, production. Every request, query, and connection string in AIWorkspaces supports variable interpolation. Switching the active environment instantly re-resolves all variables everywhere without editing individual requests.
 
 ## 11.1 Two tiers of values
 
@@ -636,13 +636,13 @@ Environment values are split into two tiers: plain values that are safe to commi
 
 | **Tier** | **Example values** | **Stored in** | **Gitignored?** |
 | --- | --- | --- | --- |
-| Plain values | base_url, db_host, api_version | .monocode/environments.json | No — safe to commit |
-| Project secrets | api_key, db_password, jwt_secret | .monocode/secrets.json | Yes — always |
-| Global secrets | Personal API keys reused across projects | ~/.monocode/secrets.json | Yes — always |
+| Plain values | base_url, db_host, api_version | .aiworkspaces/environments.json | No — safe to commit |
+| Project secrets | api_key, db_password, jwt_secret | .aiworkspaces/secrets.json | Yes — always |
+| Global secrets | Personal API keys reused across projects | ~/.aiworkspaces/secrets.json | Yes — always |
 | Runtime tokens | Auth tokens captured from login responses | Memory only (Zustand) | N/A — not persisted |
 
 ```json
-// .monocode/environments.json  (git-tracked, safe to commit)
+// .aiworkspaces/environments.json  (git-tracked, safe to commit)
 {
   "active": "local",
   "environments": {
@@ -666,7 +666,7 @@ Environment values are split into two tiers: plain values that are safe to commi
     }
   }
 }
-// .monocode/secrets.json  (gitignored, personal)
+// .aiworkspaces/secrets.json  (gitignored, personal)
 {
   "API_KEY": "sk-live-abc123...",
   "db_password": "supersecret"
@@ -675,21 +675,21 @@ Environment values are split into two tiers: plain values that are safe to commi
 
 ## 11.2 Variable resolution order
 
-When MonoCode resolves a {{variable}} in a request, query, header, or connection string, it walks this resolution chain and returns the first match.
+When AIWorkspaces resolves a {{variable}} in a request, query, header, or connection string, it walks this resolution chain and returns the first match.
 
 ```
 Resolution order for {{variable_name}}:
   1. Runtime tokens (captured this session — highest priority)
-  2. Active environment plain values (.monocode/environments.json)
-  3. Project secrets (.monocode/secrets.json)
-  4. Global secrets (~/.monocode/secrets.json)
+  2. Active environment plain values (.aiworkspaces/environments.json)
+  3. Project secrets (.aiworkspaces/secrets.json)
+  4. Global secrets (~/.aiworkspaces/secrets.json)
 First match wins. Unresolved variables shown in red in the UI.
 Claude Code never receives secret values — only resolved results.
 ```
 
 ## 11.3 Token reuse — capture and inject
 
-Auth tokens are obtained at runtime via a login request. MonoCode captures the token from the response and stores it as a runtime variable. All subsequent requests that reference {{auth_token}} receive the captured value automatically — including requests fired by Claude Code via MCP.
+Auth tokens are obtained at runtime via a login request. AIWorkspaces captures the token from the response and stores it as a runtime variable. All subsequent requests that reference {{auth_token}} receive the captured value automatically — including requests fired by Claude Code via MCP.
 
 ### Capture
 
@@ -716,7 +716,7 @@ Headers:
   Authorization: Bearer {{auth_token}}   ← resolved at fire time
   X-API-Version: {{api_version}}          ← resolved from environment
 
-// MonoCode resolves before firing:
+// AIWorkspaces resolves before firing:
 GET https://localhost:3000/api/users
 Headers:
   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -725,7 +725,7 @@ Headers:
 // Claude Code uses the same mechanism via MCP:
 // http_request({ url: "{{base_url}}/api/users",
 //                headers: { Authorization: "Bearer {{auth_token}}" } })
-// → MonoCode resolves → Claude Code never sees the raw token
+// → AIWorkspaces resolves → Claude Code never sees the raw token
 ```
 
 ## 11.4 Claude Code and environments
@@ -748,20 +748,20 @@ Developer A sets up the project:
   2. Fills in plain values: base_url, db_name, api_version
   3. Uses {{PLACEHOLDER}} for secrets
   4. Saves HTTP collections and DB collections
-  5. git commit .monocode/environments.json
-              .monocode/http/collections.json
-              .monocode/db/collections.json
+  5. git commit .aiworkspaces/environments.json
+              .aiworkspaces/http/collections.json
+              .aiworkspaces/db/collections.json
 
 Developer B pulls the repo:
-  1. Opens project in MonoCode
+  1. Opens project in AIWorkspaces
   2. Sees all environments, collections, variable names
-  3. Creates their own .monocode/secrets.json with real values
+  3. Creates their own .aiworkspaces/secrets.json with real values
   4. Everything works immediately
 
 Claude Code on any machine:
   1. Reads environments.json via env_get_variables
   2. Uses {{base_url}}, {{auth_token}} in requests
-  3. Never sees secrets — MonoCode resolves them transparently
+  3. Never sees secrets — AIWorkspaces resolves them transparently
 ```
 
 # 12. Risk Register
@@ -776,7 +776,7 @@ This register names the known unknowns and material risks in the architecture ab
 | R4 | tmux-based session persistence does not work on Windows; §5.2 quietly assumes Unix. | High | Medium — broken feature or platform drop | Decide explicitly: either (a) Windows is unsupported in v1, stated in README, or (b) build ConPTY + detached host process persistence path. Do not ship ambiguous. |
 | R5 | .claude/mcp.json auto-write on project open (§8.3) overwrites developer config or surprises teams that commit .claude/. | Medium | Medium — trust erosion, one-star reviews | Prompt on first open per project. Respect existing mcp.json. Offer a global “never auto-configure MCP” toggle in settings. |
 | R6 | Embedded WebView can drive MCP bridge if attacker-controlled content loads in browser panel. | Low | High — arbitrary DB/HTTP execution | Enforce origin check on Tauri IPC calls reaching mcp_bridge.rs. Browser panel uses a separate WebView partition with no IPC access. Documented in Security Model (§13). |
-| R7 | Request log is memory-only (§9.4); developer loses the Claude Code request that broke staging on cmd-Q. | High | Low — productivity, not correctness | Rolling 24h disk cache at .monocode/http/recent.jsonl, gitignored. Still not an archive; still cleared on user action. |
+| R7 | Request log is memory-only (§9.4); developer loses the Claude Code request that broke staging on cmd-Q. | High | Low — productivity, not correctness | Rolling 24h disk cache at .aiworkspaces/http/recent.jsonl, gitignored. Still not an archive; still cleared on user action. |
 | R8 | Binary size and memory claims (“10× smaller than Electron”) may not survive Monaco + xterm.js + WebView + MCP sidecar. | High | Low — marketing, not function | Measure at each milestone. Drop the specific multiplier from public copy. Keep “smaller and faster startup” as the claim. |
 | R9 | No plugin seam in v1 (§7 forbids AI API calls anywhere). Future integrations require architectural surgery. | Medium | Medium — long-term flexibility | Design panel interfaces and store slices as if plugins existed, even if no plugin host ships. Mark extension points in code comments. |
 | R10 | Telemetry, crash reporting, and update channel are not specified. Will be decided reactively under incident pressure. | High | Medium — operational blindness | Decide before v1: choose “none” or choose a stack. Document. Either is fine; ambiguity is not. |
@@ -787,7 +787,7 @@ The register is reviewed at every release. An item is closed when its mitigation
 
 # 13. Security Model
 
-MonoCode is a local-first developer tool. It does not manage multi-tenant access, it does not hold production credentials for anyone but the developer running it, and it does not serve network traffic. That frames the threat model: the realistic adversaries are attacker-controlled content (pages loaded in the browser panel, responses from HTTP APIs), an overreaching agent (Claude Code driving MCP tools into unintended actions), and inadvertent leakage (secrets spilling into logs, screenshots, or model context).
+AIWorkspaces is a local-first developer tool. It does not manage multi-tenant access, it does not hold production credentials for anyone but the developer running it, and it does not serve network traffic. That frames the threat model: the realistic adversaries are attacker-controlled content (pages loaded in the browser panel, responses from HTTP APIs), an overreaching agent (Claude Code driving MCP tools into unintended actions), and inadvertent leakage (secrets spilling into logs, screenshots, or model context).
 
 ## 13.1 Trust boundaries
 
@@ -795,14 +795,14 @@ The application crosses four trust boundaries. Each is named so it can be audite
 
 | **Boundary** | **Trusted side** | **Untrusted side** | **Enforcement** |
 | --- | --- | --- | --- |
-| Developer ↔ MonoCode main process | Developer keystrokes, native file dialogs | — | OS process isolation |
-| MonoCode main ↔ Tauri IPC | React UI, Zustand store | Any WebView content, including browser panel pages | Origin check on every invoke; browser panel runs in a separate WebView partition with IPC disabled |
+| Developer ↔ AIWorkspaces main process | Developer keystrokes, native file dialogs | — | OS process isolation |
+| AIWorkspaces main ↔ Tauri IPC | React UI, Zustand store | Any WebView content, including browser panel pages | Origin check on every invoke; browser panel runs in a separate WebView partition with IPC disabled |
 | Tauri main ↔ MCP sidecar | MCP server process | Claude Code input | Unix socket / named pipe; per-project scope; destructive-action confirmation events |
 | MCP sidecar ↔ Claude Code | Claude Code CLI | Model output (can request arbitrary tool calls) | Tool allowlist per project; outbound response redactor; rate limits on destructive tools |
 
 ## 13.2 Secrets handling
 
-Secrets live in .monocode/secrets.json (project) and ~/.monocode/secrets.json (global). They are never logged, never screenshotted, never sent to Claude Code. The enforcement points are specific and testable.
+Secrets live in .aiworkspaces/secrets.json (project) and ~/.aiworkspaces/secrets.json (global). They are never logged, never screenshotted, never sent to Claude Code. The enforcement points are specific and testable.
 
 - Resolution is one-way. Variables resolve to secret values at request fire time, inside httpExecutor.ts or the DB driver. The resolved value is used on the wire and discarded. It never enters the Zustand store, the request log, or the screenshot buffer.
 
@@ -830,16 +830,16 @@ Claude Code acts through MCP tools. The containment model treats the agent as tr
 
 The destructive SQL gate described in §10.4 is a user-experience speed bump, not a security boundary. Regex on uppercased SQL cannot reliably classify intent — CTEs, leading comments, multi-statement scripts, and non-SQL dialects all defeat it. The gate exists to catch obvious mistakes, not to stop a determined or confused agent.
 
-The real boundary is the database credential. For any connection that MonoCode advertises to MCP, the default credential is read-only. Write access is opt-in per connection, per session, and expires. This is the invariant a security review can actually verify.
+The real boundary is the database credential. For any connection that AIWorkspaces advertises to MCP, the default credential is read-only. Write access is opt-in per connection, per session, and expires. This is the invariant a security review can actually verify.
 
 ## 13.5 What is explicitly out of scope
 
-- Multi-user / shared-host deployments. MonoCode assumes one developer per running instance. If multiple developers share a host, each runs their own instance with their own ~/.monocode.
+- Multi-user / shared-host deployments. AIWorkspaces assumes one developer per running instance. If multiple developers share a host, each runs their own instance with their own ~/.aiworkspaces.
 
-- Production credential vaulting. MonoCode stores connection strings and secrets as local files. Teams that need vaulting should resolve secrets from an external vault into ~/.monocode/secrets.json at session start — MonoCode does not replace 1Password, Vault, or doppler.
+- Production credential vaulting. AIWorkspaces stores connection strings and secrets as local files. Teams that need vaulting should resolve secrets from an external vault into ~/.aiworkspaces/secrets.json at session start — AIWorkspaces does not replace 1Password, Vault, or doppler.
 
-- Supply-chain verification of Claude Code itself. MonoCode launches whatever binary is on PATH. Integrity of the Claude Code CLI is outside MonoCode’s trust boundary.
+- Supply-chain verification of Claude Code itself. AIWorkspaces launches whatever binary is on PATH. Integrity of the Claude Code CLI is outside AIWorkspaces’s trust boundary.
 
-- Encryption at rest. .monocode/*.json files are readable by any process running as the developer’s user. This matches how VS Code, git config, and .env files behave; it is a deliberate choice, not an oversight.
+- Encryption at rest. .aiworkspaces/*.json files are readable by any process running as the developer’s user. This matches how VS Code, git config, and .env files behave; it is a deliberate choice, not an oversight.
 
-MonoCode · Architecture Document · v1.0 · April 2026
+AIWorkspaces · Architecture Document · v1.0 · April 2026
