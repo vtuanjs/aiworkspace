@@ -1,339 +1,212 @@
-// Embedded browser + console log capture + Send to Claude Code.
+// Embedded browser as a child webview inside the main Tauri window.
+// Positioned using client-relative coordinates from getBoundingClientRect.
 
-import React, { useState, useRef, useEffect } from "react";
-import { emit, listen } from "@tauri-apps/api/event";
+import { useRef, useEffect, useCallback, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useWorkspaceStore } from "../../../store/workspace";
-import { sendToClaudeCode } from "../../../lib/sendToClaudeCode";
 
-export const CONSOLE_LEVEL = {
-  ERROR: "error",
-  WARN: "warn",
-  INFO: "info",
-  LOG: "log",
-} as const;
-export type ConsoleLevel = typeof CONSOLE_LEVEL[keyof typeof CONSOLE_LEVEL];
-
-export interface ConsoleEntry {
-  id: string;
-  level: ConsoleLevel;
-  message: string;
-  source?: string;
-  timestamp: number;
+interface BrowserData {
+  type: string;
+  [key: string]: unknown;
 }
 
-const LEVEL_COLOR: Record<ConsoleLevel, string> = {
-  error: "#f38ba8",
-  warn: "#fab387",
-  info: "#89b4fa",
-  log: "#cdd6f4",
+// getBoundingClientRect() returns CSS logical pixels, but Tauri's add_child/set_position
+// on macOS expects physical pixels. Multiply by devicePixelRatio so Rust can use
+// PhysicalPosition/PhysicalSize and get pixel-perfect placement on Retina displays.
+function getClientBounds(el: HTMLElement): { x: number; y: number; width: number; height: number } | null {
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const dpr = window.devicePixelRatio || 1;
+  return {
+    x: Math.round(rect.left * dpr),
+    y: Math.round(rect.top * dpr),
+    width: Math.round(rect.width * dpr),
+    height: Math.round(rect.height * dpr),
+  };
+}
+
+function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return "https://" + trimmed;
+}
+
+const BTN_BASE: React.CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#6c7086",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  transition: "background 0.1s, color 0.1s",
 };
 
+function ToolBtn({ title, onClick, children, style }: { title: string; onClick: () => void; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      style={{ ...BTN_BASE, width: 26, height: 24, borderRadius: 4, fontSize: 14, ...style }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#313244"; (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function BrowserPanel() {
-  const { browserUrl, setBrowserUrl } = useWorkspaceStore();
-  const [urlInput, setUrlInput] = useState(browserUrl);
-  const [consoleLogs, setConsoleLogs] = useState<ConsoleEntry[]>([]);
-  const [sendingId, setSendingId] = useState<string | null>(null);
-  const [consoleHeight, setConsoleHeight] = useState(160);
-  const webviewRef = useRef<HTMLElement | null>(null);
+  const { browserUrl, setBrowserUrl, rightTab } = useWorkspaceStore();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const webviewOpenRef = useRef(false);
+  const [inputUrl, setInputUrl] = useState(browserUrl || "");
 
-  const startConsoleResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startH = consoleHeight;
-    const onMove = (ev: MouseEvent) => {
-      setConsoleHeight(Math.max(60, Math.min(500, startH + startY - ev.clientY)));
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  // Keep URL input in sync if browserUrl changes externally (e.g. MCP browser_navigate)
+  // Sync address bar when URL changes from in-webview navigation
   useEffect(() => {
-    setUrlInput(browserUrl);
+    setInputUrl(browserUrl || "");
   }, [browserUrl]);
 
-  // Listen for MCP request to return console logs
+  const handleNavigate = useCallback(() => {
+    const url = normalizeUrl(inputUrl);
+    if (!url) return;
+    setInputUrl(url);
+    setBrowserUrl(url);
+  }, [inputUrl, setBrowserUrl]);
+
+  const openOrNavigate = useCallback(async (url: string) => {
+    const el = containerRef.current;
+    if (!el || !url) return;
+    // Wait for sibling toolbar and layout to settle before measuring bounds.
+    // RAF alone can miss conditional siblings that render in the same cycle.
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const bounds = getClientBounds(el);
+    if (!bounds) return;
+    try {
+      await invoke("browser_open", { url, ...bounds });
+      webviewOpenRef.current = true;
+    } catch (e) {
+      console.error("[BrowserPanel] browser_open failed:", e);
+    }
+  }, []);
+
   useEffect(() => {
-    const unlistenPromise = listen("mcp:request_console_logs", async () => {
-      await emit("mcp:console_logs", consoleLogs);
-    });
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [consoleLogs]);
+    if (browserUrl) openOrNavigate(browserUrl);
+  }, [browserUrl, openOrNavigate]);
 
-  const handleNavigate = () => {
-    const trimmed = urlInput.trim();
-    if (!trimmed) return;
-    setBrowserUrl(trimmed);
-  };
+  // Close browser window when switching to HTTP/DB tab; reopen when back to Browser.
+  useEffect(() => {
+    if (rightTab !== "browser") {
+      invoke("browser_close", {}).catch(() => {});
+      webviewOpenRef.current = false;
+    } else if (browserUrl) {
+      openOrNavigate(browserUrl);
+    }
+  }, [rightTab, browserUrl, openOrNavigate]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleNavigate();
-  };
-
-  const handleSendToClaudeCode = async (entry: ConsoleEntry) => {
-    setSendingId(entry.id);
-    await sendToClaudeCode({
-      source: "browser",
-      content: `Browser ${entry.level} at ${browserUrl}:\n${entry.message}${
-        entry.source ? `\nSource: ${entry.source}` : ""
-      }`,
-    });
-    setTimeout(() => setSendingId(null), 1200);
-  };
-
-  const handleClearConsole = () => {
-    setConsoleLogs([]);
-  };
-
-  // Inject a console-capturing script into the webview when the URL changes.
-  // In Tauri 2, <webview> is a custom element. We post-process its dom-ready event
-  // to capture window.console calls and push them into our React state.
-  // Note: direct DOM manipulation of the webview tag is the supported approach here
-  // because the panel runs inside the main WebView partition.
-  const handleWebviewRef = (el: HTMLElement | null) => {
-    if (!el || webviewRef.current === el) return;
-    webviewRef.current = el;
-
-    const addLog = (level: ConsoleLevel, message: string, source?: string) => {
-      setConsoleLogs((prev) => [
-        {
-          id: crypto.randomUUID(),
-          level,
-          message,
-          source,
-          timestamp: Date.now(),
-        },
-        ...prev,
-      ]);
-    };
-
-    // Tauri's webview tag supports event listeners for dom-ready
-    el.addEventListener("dom-ready", () => {
-      // Inject console override script into the embedded page
-      const script = `
-        (function() {
-          const original = { log: console.log, info: console.info, warn: console.warn, error: console.error };
-          ['log','info','warn','error'].forEach(function(level) {
-            console[level] = function() {
-              original[level].apply(console, arguments);
-              try {
-                const msg = Array.from(arguments).map(function(a) {
-                  return typeof a === 'object' ? JSON.stringify(a) : String(a);
-                }).join(' ');
-                window.__aiworkspace_log && window.__aiworkspace_log(level, msg);
-              } catch(_) {}
-            };
-          });
-        })();
-      `;
-      // executeJavaScript is available on Tauri webview elements
-      (el as unknown as { executeJavaScript: (s: string) => Promise<unknown> })
-        .executeJavaScript(script)
-        .catch(() => {});
-    });
-
-    // Listen for console messages from the embedded page via IPC message
-    el.addEventListener(
-      "ipc-message",
-      (evt: Event) => {
-        const e = evt as CustomEvent<{ channel: string; args: unknown[] }>;
-        if (e.detail?.channel === "console") {
-          const [level, message, source] = e.detail.args as [
-            ConsoleLevel,
-            string,
-            string | undefined,
-          ];
-          addLog(level, message, source);
-        }
+  // Resize observer — reposition/close child webview as panel resizes
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(async (entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) {
+        invoke("browser_close", {}).catch(() => {});
+        webviewOpenRef.current = false;
+      } else if (webviewOpenRef.current) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        const bounds = getClientBounds(el);
+        if (bounds) invoke("browser_set_bounds", bounds).catch(() => {});
+      } else if (browserUrl) {
+        openOrNavigate(browserUrl);
       }
-    );
-  };
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      invoke("browser_close", {}).catch(() => {});
+      webviewOpenRef.current = false;
+    };
+  }, [browserUrl, openOrNavigate]);
+
+  // Relay events from the injected init script
+  useEffect(() => {
+    const p = listen<BrowserData>("browser:data", (evt) => {
+      const data = evt.payload;
+      if (data.type === "navigate") {
+        setBrowserUrl(data.url as string);
+      } else if (data.type === "devtools") {
+        invoke("browser_open_devtools", {}).catch(() => {});
+      }
+    }).catch(() => Promise.resolve(() => {}));
+    return () => { p.then((u) => u()); };
+  }, [setBrowserUrl]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#1e1e2e" }}>
-      {/* URL bar */}
-      <div
-        style={{
-          display: "flex",
-          padding: "8px",
-          gap: "8px",
-          borderBottom: "1px solid #313244",
-          background: "#181825",
-          flexShrink: 0,
-        }}
-      >
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, background: "#1e1e2e" }}>
+      {/* URL toolbar — always visible so users can enter a URL even before any page loads */}
+      <div style={{
+        height: 36,
+        background: "#181825",
+        borderBottom: "1px solid #313244",
+        display: "flex",
+        alignItems: "center",
+        padding: "0 6px",
+        gap: 4,
+        flexShrink: 0,
+      }}>
+        <ToolBtn title="Back" onClick={() => invoke("browser_go_back", {}).catch(() => {})}>←</ToolBtn>
         <input
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="https://localhost:3000"
+          type="text"
+          value={inputUrl}
+          onChange={(e) => setInputUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleNavigate(); }}
+          placeholder="Enter URL and press Enter…"
           style={{
             flex: 1,
+            minWidth: 0,
             background: "#313244",
             border: "1px solid #45475a",
             borderRadius: 4,
-            padding: "4px 8px",
+            padding: "3px 8px",
             color: "#cdd6f4",
-            fontSize: 13,
+            fontSize: 12,
             outline: "none",
+            fontFamily: "inherit",
           }}
+          onFocus={(e) => { (e.currentTarget as HTMLInputElement).style.borderColor = "#cba6f7"; }}
+          onBlur={(e) => { (e.currentTarget as HTMLInputElement).style.borderColor = "#45475a"; }}
         />
         <button
-          onClick={handleNavigate}
+          title="Open DevTools"
+          onClick={() => invoke("browser_open_devtools", {}).catch(() => {})}
           style={{
-            padding: "4px 14px",
-            background: "#6c7086",
-            border: "none",
+            ...BTN_BASE,
+            padding: "2px 7px",
+            height: 24,
             borderRadius: 4,
-            color: "#cdd6f4",
-            cursor: "pointer",
-            fontSize: 13,
+            border: "1px solid #45475a",
+            fontSize: 11,
           }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#313244"; (e.currentTarget as HTMLButtonElement).style.color = "#cdd6f4"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "#6c7086"; }}
         >
-          Go
+          Inspect
         </button>
       </div>
 
-      {/* Webview */}
-      <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
-        {browserUrl ? (
-          ((): React.ReactNode => {
-            const WebviewTag = "webview" as unknown as React.ElementType;
-            return (
-              <WebviewTag
-                ref={handleWebviewRef}
-                src={browserUrl}
-                style={{ width: "100%", height: "100%", border: "none" }}
-              />
-            );
-          })()
-        ) : (
-          <div
-            style={{
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#6c7086",
-              fontSize: 14,
-            }}
-          >
-            Enter a URL to navigate
+      {/* Native child webview fills this div — Rust positions it to these exact bounds */}
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, background: "#11111b", position: "relative" }}>
+        {!browserUrl && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "#6c7086", fontSize: 13 }}>Enter a URL above to navigate</span>
           </div>
         )}
-      </div>
-
-      {/* Console — bottom, resizable */}
-      <div
-        style={{
-          height: consoleHeight,
-          flexShrink: 0,
-          borderTop: "1px solid #313244",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        {/* Drag handle + header */}
-        <div
-          onMouseDown={startConsoleResize}
-          style={{
-            height: 28,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 10px",
-            background: "#181825",
-            borderBottom: "1px solid #313244",
-            flexShrink: 0,
-            cursor: "row-resize",
-            userSelect: "none",
-          }}
-        >
-          <span style={{ color: "#a6adc8", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em" }}>
-            CONSOLE
-          </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleClearConsole(); }}
-            title="Clear console"
-            style={{
-              background: "none",
-              border: "none",
-              color: "#6c7086",
-              cursor: "pointer",
-              fontSize: 11,
-              padding: "1px 4px",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            Clear
-          </button>
-        </div>
-
-        {/* Log entries */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {consoleLogs.length === 0 ? (
-            <div style={{ padding: "10px 12px", color: "#6c7086", fontSize: 12 }}>
-              No console output
-            </div>
-          ) : (
-            consoleLogs.map((entry) => (
-              <div
-                key={entry.id}
-                style={{
-                  padding: "3px 10px",
-                  borderBottom: "1px solid #181825",
-                  background: entry.level === CONSOLE_LEVEL.ERROR ? "rgba(243,139,168,0.05)" : "transparent",
-                }}
-              >
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: LEVEL_COLOR[entry.level],
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      flexShrink: 0,
-                      marginTop: 1,
-                    }}
-                  >
-                    {entry.level}
-                  </span>
-                  <span style={{ color: LEVEL_COLOR[entry.level], fontSize: 12, wordBreak: "break-word", flex: 1 }}>
-                    {entry.message}
-                  </span>
-                </div>
-                {entry.source && (
-                  <div style={{ color: "#6c7086", fontSize: 10, marginTop: 1 }}>{entry.source}</div>
-                )}
-                {(entry.level === CONSOLE_LEVEL.ERROR || entry.level === CONSOLE_LEVEL.WARN) && (
-                  <button
-                    onClick={() => handleSendToClaudeCode(entry)}
-                    style={{
-                      marginTop: 3,
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      background: sendingId === entry.id ? "#a6e3a1" : "#313244",
-                      border: "none",
-                      borderRadius: 4,
-                      color: sendingId === entry.id ? "#1e1e2e" : "#cdd6f4",
-                      cursor: "pointer",
-                      transition: "background 0.3s",
-                    }}
-                  >
-                    {sendingId === entry.id ? "Sent!" : "Send to Claude Code"}
-                  </button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
       </div>
     </div>
   );
