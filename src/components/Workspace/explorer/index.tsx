@@ -37,6 +37,51 @@ export default function ExplorerPanel() {
   const [fileOp, setFileOp] = useState<FileOpState | null>(null);
   const fileOpInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Expanded folder state (persisted to explorer.json) ───────────────────────
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  // false = no saved state loaded yet for current workspace → auto-expand root on first tree load
+  const explorerInitRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    explorerInitRef.current = false;
+    setExpandedPaths(new Set());
+    if (!activeWorkspaceId) return;
+    invoke<string>("read_panel_state", { workspaceId: activeWorkspaceId, panel: "explorer" })
+      .then((raw) => {
+        const data = JSON.parse(raw) as { expanded_paths?: string[] };
+        if (data.expanded_paths !== undefined) {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          setExpandedPaths(new Set(data.expanded_paths));
+          explorerInitRef.current = true;
+        }
+      })
+      .catch(() => { explorerInitRef.current = true; });
+  }, [activeWorkspaceId]);
+
+  const saveExpandedPaths = useCallback((paths: Set<string>) => {
+    if (!activeWorkspaceId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      invoke("write_panel_state", {
+        workspaceId: activeWorkspaceId,
+        panel: "explorer",
+        content: JSON.stringify({ expanded_paths: [...paths] }),
+      }).catch(() => {});
+    }, 400);
+  }, [activeWorkspaceId]);
+
+  const handleToggleExpanded = useCallback((path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      saveExpandedPaths(next);
+      return next;
+    });
+  }, [saveExpandedPaths]);
+
+
   useEffect(() => {
     if (fileOp) setTimeout(() => fileOpInputRef.current?.focus(), 50);
   }, [fileOp]);
@@ -61,6 +106,12 @@ export default function ExplorerPanel() {
     setTreeError(null);
     refreshTree();
   }, [activeWorkspace?.path]);
+
+  // Mark init complete when tree loads (no auto-expand on first load)
+  useEffect(() => {
+    if (!tree || explorerInitRef.current) return;
+    explorerInitRef.current = true;
+  }, [tree]);
 
   useEffect(() => {
     if (!activeWorkspace) return;
@@ -285,6 +336,8 @@ export default function ExplorerPanel() {
               activeFile={activeFile}
               onContextMenu={handleContextMenu}
               gitStatusMap={gitStatusMap}
+              expandedPaths={expandedPaths}
+              onToggleExpanded={handleToggleExpanded}
             />
           ))
         )}

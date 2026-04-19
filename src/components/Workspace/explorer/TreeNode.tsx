@@ -22,6 +22,8 @@ export function TreeNode({
   activeFile,
   gitStatusMap,
   onContextMenu,
+  expandedPaths,
+  onToggleExpanded,
 }: {
   entry: DirEntry;
   depth: number;
@@ -30,8 +32,10 @@ export function TreeNode({
   activeFile: string | null;
   onContextMenu: (e: React.MouseEvent, entry: DirEntry) => void;
   gitStatusMap: Map<string, GitFileStatus>;
+  expandedPaths: Set<string>;
+  onToggleExpanded: (path: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(depth < 1);
+  const expanded = expandedPaths.has(entry.path);
   const [lazyChildren, setLazyChildren] = useState<DirEntry[] | null>(null);
   const [lazyLoading, setLazyLoading] = useState(false);
 
@@ -40,9 +44,9 @@ export function TreeNode({
   const visibleChildren = lazyChildren ?? entry.children ?? [];
 
   const handleToggle = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next && entry.truncated && lazyChildren === null && !lazyLoading) {
+    const willExpand = !expanded;
+    onToggleExpanded(entry.path);
+    if (willExpand && entry.truncated && lazyChildren === null && !lazyLoading) {
       setLazyLoading(true);
       invoke<DirEntry>("read_dir_tree", { path: entry.path, depth: 4 })
         .then((sub) => setLazyChildren(sub.children ?? []))
@@ -89,6 +93,8 @@ export function TreeNode({
               activeFile={activeFile}
               onContextMenu={onContextMenu}
               gitStatusMap={gitStatusMap}
+              expandedPaths={expandedPaths}
+              onToggleExpanded={onToggleExpanded}
             />
           ))}
       </div>
